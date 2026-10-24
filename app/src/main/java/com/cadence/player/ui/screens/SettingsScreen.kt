@@ -68,7 +68,7 @@ fun SettingsScreen(vm: MusicViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     var confirmClear by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
-    val accent = MaterialTheme.colorScheme.primary
+    val uiTheme = com.cadence.player.ui.custom.UiStore.config.collectAsStateWithLifecycle().value.theme
     val version = remember {
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "1.0"
     }
@@ -83,36 +83,12 @@ fun SettingsScreen(vm: MusicViewModel, onBack: () -> Unit) {
         ) {
             SettingsSection("Appearance")
             SettingsCard {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Palette, null, tint = accent)
-                    Spacer(Modifier.width(16.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Accent color", style = MaterialTheme.typography.bodyLarge)
-                        Text(settings.accent.label, style = MaterialTheme.typography.bodySmall, color = CadenceColors.TextSecondary)
-                    }
-                }
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    AccentColor.entries.forEach { option ->
-                        val color = Color(option.argb)
-                        val selected = option == settings.accent
-                        Box(
-                            Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(color)
-                                .border(3.dp, if (selected) CadenceColors.Outline else Color.Transparent, CircleShape)
-                                .clickable { vm.updateSettings { it.copy(accent = option) } },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (selected) Icon(Icons.Rounded.Check, option.label, tint = if (option == AccentColor.MONO) Color.Black else Color.White)
-                        }
-                    }
-                }
+                ClickRow(
+                    icon = Icons.Rounded.Palette,
+                    title = "Themes, layout & gestures",
+                    subtitle = "${uiTheme.name} · ${uiTheme.backdrop.label} · ${uiTheme.accentSource.label}",
+                    onClick = { actions.navigate(Route.Themes) },
+                )
                 Divider()
                 SwitchRow(
                     icon = Icons.Rounded.Palette,

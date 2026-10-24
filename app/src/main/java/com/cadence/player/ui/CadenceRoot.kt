@@ -100,6 +100,12 @@ import com.cadence.player.ui.screens.PlaylistsScreen
 import com.cadence.player.ui.screens.RadioScreen
 import com.cadence.player.ui.theme.LineIcons
 import com.cadence.player.ui.dj.DjScreen
+import com.cadence.player.ui.custom.AccentSource
+import com.cadence.player.ui.custom.Backdrop
+import com.cadence.player.ui.custom.HomeDashboard
+import com.cadence.player.ui.custom.ThemeGalleryScreen
+import com.cadence.player.ui.custom.UiStore
+import com.cadence.player.ui.components.rememberArtColor
 import com.cadence.player.ui.visualizer.VisualizerScreen
 import com.cadence.player.ui.screens.SearchScreen
 import com.cadence.player.ui.screens.SettingsScreen
@@ -115,8 +121,25 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun CadenceRoot(vm: MusicViewModel, openPlayerRequest: MutableStateFlow<Boolean>) {
-    val settings by vm.settings.collectAsStateWithLifecycle()
-    val accent by animateColorAsState(Color(settings.accent.argb), tween(450), label = "accent")
+    val ui by UiStore.config.collectAsStateWithLifecycle()
+    val theme = ui.theme
+    val context0 = LocalContext.current
+    val currentSong = vm.currentSong.collectAsStateWithLifecycle().value
+    val artAccent = rememberArtColor(currentSong?.art, theme.accentSource == AccentSource.ARTWORK)
+    val wallpaperAccent = remember(theme.accentSource) {
+        if (theme.accentSource == AccentSource.WALLPAPER && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            androidx.compose.material3.dynamicDarkColorScheme(context0).primary
+        } else {
+            null
+        }
+    }
+    val targetAccent = when (theme.accentSource) {
+        AccentSource.FIXED -> Color(theme.accent)
+        AccentSource.ARTWORK -> artAccent?.let { androidx.compose.ui.graphics.lerp(it, Color.White, 0.25f) } ?: Color(theme.accent)
+        AccentSource.WALLPAPER -> wallpaperAccent ?: Color(theme.accent)
+    }
+    LaunchedEffect(theme.backdrop) { CadenceColors.applyBackdrop(theme.backdrop == Backdrop.AMOLED) }
+    val accent by animateColorAsState(targetAccent, tween(600), label = "accent")
     CadenceTheme(accent = accent) {
         val context = LocalContext.current
         var hasPermission by remember { mutableStateOf(hasAudioPermission(context)) }
@@ -244,7 +267,8 @@ private fun PermissionScreen(onGranted: () -> Unit) {
 
 @Composable
 private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow<Boolean>) {
-    val navigator = remember { Navigator() }
+    val navigator = remember { Navigator(UiStore.config.value.tabs.firstOrNull() ?: Tab.PLAYER) }
+    val uiConfig by UiStore.config.collectAsStateWithLifecycle()
     var menuFor by remember { mutableStateOf<Pair<Song, PlaylistContext?>?>(null) }
     var addToPlaylistSongs by remember { mutableStateOf<List<Song>?>(null) }
     var showSleep by remember { mutableStateOf(false) }
@@ -305,12 +329,18 @@ private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow
                     }
                 }
                 BottomTabs(
+                    tabs = uiConfig.tabs,
                     selected = navigator.tab,
                     onSelect = { navigator.selectTab(it) },
                     onMore = { item ->
                         when (item) {
                             MoreItem.SETTINGS -> navigator.push(Route.Settings)
                             MoreItem.DJ -> navigator.push(Route.Dj)
+                            MoreItem.CUSTOMIZE -> {
+                                navigator.selectTab(Tab.PLAYER)
+                                UiStore.setEditing(true)
+                            }
+                            MoreItem.THEMES -> navigator.push(Route.Themes)
                             MoreItem.VISUALIZER -> showVisualizer = true
                             MoreItem.EQUALIZER -> navigator.push(Route.Equalizer)
                             MoreItem.SLEEP -> showSleep = true
@@ -361,6 +391,7 @@ private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow
 private fun RouteContent(route: Route, vm: MusicViewModel, onBack: () -> Unit) {
     when (route) {
         is Route.TabRoot -> when (route.tab) {
+            Tab.HOME -> HomeDashboard(vm)
             Tab.QUEUE -> QueueScreen(vm)
             Tab.PLAYER -> PlayerScreen(vm)
             Tab.FOLDERS -> FoldersScreen(vm)
@@ -380,11 +411,14 @@ private fun RouteContent(route: Route, vm: MusicViewModel, onBack: () -> Unit) {
         Route.Equalizer -> EqualizerScreen(vm, onBack)
         Route.Settings -> SettingsScreen(vm, onBack)
         Route.Dj -> DjScreen(vm, onBack)
+        Route.Themes -> ThemeGalleryScreen(vm, onBack)
     }
 }
 
 private enum class MoreItem(val label: String, val icon: ImageVector) {
     DJ("Auto DJ", LineIcons.Dj),
+    CUSTOMIZE("Customize player", LineIcons.Edit),
+    THEMES("Themes & layout", LineIcons.Palette),
     VISUALIZER("Visualizer", LineIcons.Visualizer),
     EQUALIZER("Equalizer", LineIcons.Equalizer),
     SLEEP("Sleep timer", LineIcons.Sleep),
@@ -395,7 +429,7 @@ private enum class MoreItem(val label: String, val icon: ImageVector) {
 
 /** Minimal tab bar: thin icons, a hairline on top and a short line under the selected tab. */
 @Composable
-private fun BottomTabs(selected: Tab, onSelect: (Tab) -> Unit, onMore: (MoreItem) -> Unit) {
+private fun BottomTabs(tabs: List<Tab>, selected: Tab, onSelect: (Tab) -> Unit, onMore: (MoreItem) -> Unit) {
     var moreOpen by remember { mutableStateOf(false) }
     Column(
         Modifier
@@ -411,7 +445,7 @@ private fun BottomTabs(selected: Tab, onSelect: (Tab) -> Unit, onMore: (MoreItem
                 .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Tab.entries.forEach { tab ->
+            tabs.forEach { tab ->
                 val isSelected = tab == selected
                 val tint by animateColorAsState(
                     if (isSelected) CadenceColors.TextPrimary else Color(0xFF6E6E6E),

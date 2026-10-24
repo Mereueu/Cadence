@@ -41,6 +41,8 @@ data class TrackAnalysis(
     val waveHigh: ByteArray,
     /** Energy per bar 0..1, for structure-aware visuals. */
     val barEnergy: FloatArray,
+    /** Absolute loudness (RMS of the loud part of the song), for volume normalisation. */
+    val loudness: Float = 0.12f,
 ) {
     val beatMs: Double get() = 60_000.0 / bpm
     val barMs: Double get() = beatMs * 4
@@ -88,6 +90,7 @@ data class TrackAnalysis(
         .put("intro", introEndMs)
         .put("outro", outroStartMs)
         .put("energy", energy.toDouble())
+        .put("loud", loudness.toDouble())
         .put("bright", brightness.toDouble())
         .put("wp", b64(wavePeak))
         .put("wl", b64(waveLow))
@@ -100,7 +103,7 @@ data class TrackAnalysis(
         .toString()
 
     companion object {
-        const val VERSION = 1
+        const val VERSION = 2
 
         private fun b64(b: ByteArray) = Base64.encodeToString(b, Base64.NO_WRAP)
         private fun unb64(s: String) = Base64.decode(s, Base64.NO_WRAP)
@@ -133,6 +136,7 @@ data class TrackAnalysis(
                 waveMid = unb64(o.getString("wm")),
                 waveHigh = unb64(o.getString("wh")),
                 barEnergy = FloatArray(be.length()) { be.getInt(it) / 1000f },
+                loudness = o.optDouble("loud", 0.12).toFloat(),
             )
         }.getOrNull()
     }

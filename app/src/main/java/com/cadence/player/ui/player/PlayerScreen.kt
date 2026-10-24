@@ -81,6 +81,25 @@ import com.cadence.player.ui.theme.CadenceColors
 import com.cadence.player.ui.theme.LineIcons
 import com.cadence.player.playback.AutoDj
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import com.cadence.player.modes.ModeEngine
+import com.cadence.player.ui.Tab
+import com.cadence.player.ui.components.MinimalButton
+import com.cadence.player.ui.custom.*
+import com.cadence.player.ui.dj.rememberSmoothPosition
+import com.cadence.player.ui.sheets.CadenceSheet
 import kotlinx.coroutines.launch
 
 private val Dim = Color(0xFF8C8C8C)
@@ -91,7 +110,7 @@ fun PlayerScreen(vm: MusicViewModel) {
     val radio = vm.currentRadio.collectAsStateWithLifecycle().value
     val library by vm.library.collectAsStateWithLifecycle()
     when {
-        song != null -> SongPlayer(vm, song)
+        song != null -> ModularSongPlayer(vm, song)
         radio != null -> RadioPlayer(vm, radio)
         else -> Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.Center) {
             EmptyState(
@@ -429,10 +448,10 @@ private fun showVolume(context: Context) {
 
 /** Large hairline circle with a thin play/pause glyph. */
 @Composable
-private fun PlayCircle(playing: Boolean, buffering: Boolean, onClick: () -> Unit) {
+private fun PlayCircle(playing: Boolean, buffering: Boolean, size: Dp = 80.dp, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(80.dp)
+            .size(size)
             .clip(CircleShape)
             .border(1.5.dp, CadenceColors.TextPrimary, CircleShape)
             .clickable(onClick = onClick),
@@ -443,11 +462,11 @@ private fun PlayCircle(playing: Boolean, buffering: Boolean, onClick: () -> Unit
                 if (p) LineIcons.Pause else LineIcons.Play,
                 contentDescription = if (p) "Pause" else "Play",
                 tint = CadenceColors.TextPrimary,
-                modifier = Modifier.size(30.dp),
+                modifier = Modifier.size(size * 0.375f),
             )
         }
         if (buffering) {
-            CircularProgressIndicator(Modifier.size(80.dp), color = CadenceColors.TextPrimary, strokeWidth = 1.dp)
+            CircularProgressIndicator(Modifier.size(size), color = CadenceColors.TextPrimary, strokeWidth = 1.dp)
         }
     }
 }
@@ -529,4 +548,452 @@ private fun formatName(mime: String): String = when (mime.lowercase()) {
     "audio/aiff", "audio/x-aiff" -> "AIFF (lossless)"
     "audio/alac", "audio/x-alac" -> "ALAC (lossless)"
     else -> mime
+}
+
+// =============================================================================================
+// Modular player: blocks the user can reorder, resize, configure and hide (v1.4)
+// =============================================================================================
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ModularSongPlayer(vm: MusicViewModel, song: Song) {
+    val ui by UiStore.config.collectAsStateWithLifecycle()
+    val editing by UiStore.editingPlayer.collectAsStateWithLifecycle()
+    val state by vm.player.state.collectAsStateWithLifecycle()
+    val position by vm.player.position.collectAsStateWithLifecycle()
+    val favorites by vm.favorites.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val sleepEndsAt by vm.sleepTimerEndsAt.collectAsStateWithLifecycle()
+    val dj by vm.dj.collectAsStateWithLifecycle()
+    val analyses by vm.analyses.collectAsStateWithLifecycle()
+    val mode by ModeEngine.mode.collectAsStateWithLifecycle()
+    val actions = LocalActions.current
+    val context = LocalContext.current
+    val analysis = analyses[song.id]
+    LaunchedEffect(song.id) { vm.requestAnalysis(song.id) }
+    var scrub by remember { mutableStateOf<Float?>(null) }
+    var showInfo by remember { mutableStateOf(false) }
+    var configuring by remember { mutableStateOf<BlockType?>(null) }
+    val smoothPos by rememberSmoothPosition(position, state.isPlaying)
+
+    val artColor = rememberArtColor(song.art, settings.tintNowPlaying)
+    val top by animateColorAsState(
+        if (artColor != null) lerp(CadenceColors.Background, artColor, 0.3f) else CadenceColors.Background,
+        tween(600),
+        label = "playerTop",
+    )
+    val isFavorite = song.id in favorites
+    val duration = state.durationMs.takeIf { it > 0 } ?: song.duration
+    val shownPosition = scrub?.let { (it * duration).toLong() } ?: position
+    val progress = if (duration > 0) shownPosition.toFloat() / duration else 0f
+    val mixing = dj.phase == AutoDj.Phase.MIXING || dj.phase == AutoDj.Phase.SETTLING
+    val curPos = state.queue.indexOfFirst { it.index == state.currentIndex }
+    val nextSong = state.queue.getOrNull(curPos + 1)?.let { vm.songById(it.songId) }
+
+    fun press(b: PlayerButton) {
+        when (b) {
+            PlayerButton.PREV -> vm.player.previous()
+            PlayerButton.PLAY -> vm.player.togglePlayPause()
+            PlayerButton.NEXT -> vm.player.next()
+            PlayerButton.SHUFFLE -> {
+                vm.player.toggleShuffle()
+                actions.showMessage(if (state.shuffle) "Shuffle off" else "Shuffle on")
+            }
+            PlayerButton.REPEAT -> {
+                vm.player.cycleRepeat()
+                actions.showMessage(
+                    when (state.repeatMode) {
+                        Player.REPEAT_MODE_OFF -> "Repeat queue"
+                        Player.REPEAT_MODE_ALL -> "Repeat this song"
+                        else -> "Repeat off"
+                    }
+                )
+            }
+            PlayerButton.BACK10 -> vm.player.seekBy(-10_000)
+            PlayerButton.FWD30 -> vm.player.seekBy(30_000)
+            PlayerButton.VOLUME -> showVolume(context)
+            PlayerButton.EQ -> actions.navigate(Route.Equalizer)
+            PlayerButton.SLEEP -> actions.openSleepTimer()
+            PlayerButton.FAVORITE -> {
+                vm.toggleFavorite(song.id)
+                actions.showMessage(if (isFavorite) "Removed from favorites" else "Added to favorites")
+            }
+            PlayerButton.INFO -> showInfo = true
+            PlayerButton.ADD -> actions.addToPlaylist(listOf(song))
+            PlayerButton.MORE -> actions.openSongMenu(song, null)
+            PlayerButton.QUEUE -> actions.selectTab(Tab.QUEUE)
+            PlayerButton.DJ -> actions.navigate(Route.Dj)
+            PlayerButton.VISUALIZER -> actions.openVisualizer()
+            PlayerButton.SPEED -> actions.openSpeed()
+        }
+    }
+
+    fun gesture(g: Gesture) {
+        when (ui.gestures[g] ?: GestureAction.NONE) {
+            GestureAction.NONE -> Unit
+            GestureAction.NEXT -> vm.player.next()
+            GestureAction.PREVIOUS -> vm.player.previous()
+            GestureAction.PLAY_PAUSE -> vm.player.togglePlayPause()
+            GestureAction.FAVORITE -> press(PlayerButton.FAVORITE)
+            GestureAction.QUEUE -> actions.selectTab(Tab.QUEUE)
+            GestureAction.SONG_MENU -> actions.openSongMenu(song, null)
+            GestureAction.VISUALIZER -> actions.openVisualizer()
+            GestureAction.MIX_NOW -> AutoDj.mixNow()
+            GestureAction.SEEK_FWD -> vm.player.seekBy(30_000)
+            GestureAction.SEEK_BACK -> vm.player.seekBy(-10_000)
+            GestureAction.SHUFFLE -> press(PlayerButton.SHUFFLE)
+        }
+    }
+
+    fun isActive(b: PlayerButton): Boolean = when (b) {
+        PlayerButton.SHUFFLE -> state.shuffle
+        PlayerButton.REPEAT -> state.repeatMode != Player.REPEAT_MODE_OFF
+        PlayerButton.FAVORITE -> isFavorite
+        PlayerButton.SLEEP -> sleepEndsAt != null
+        PlayerButton.DJ -> dj.config.enabled
+        PlayerButton.SPEED -> state.speed != 1f
+        else -> false
+    }
+
+    fun iconFor(b: PlayerButton) = when (b) {
+        PlayerButton.FAVORITE -> if (isFavorite) LineIcons.HeartFilled else LineIcons.Heart
+        PlayerButton.REPEAT -> if (state.repeatMode == Player.REPEAT_MODE_ONE) LineIcons.RepeatOne else LineIcons.Repeat
+        else -> b.icon
+    }
+
+    val density = LocalDensity.current
+    val swipe = with(density) { 70.dp.toPx() }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(0f to top, 0.6f to CadenceColors.Background))
+            .statusBarsPadding()
+            .then(
+                if (editing) Modifier else Modifier
+                    .pointerInput(ui.gestures) {
+                        detectTapGestures(
+                            onDoubleTap = { gesture(Gesture.DOUBLE_TAP) },
+                            onLongPress = { gesture(Gesture.LONG_PRESS) },
+                        )
+                    }
+                    .pointerInput(ui.gestures) {
+                        var total = Offset.Zero
+                        detectDragGestures(
+                            onDragStart = { total = Offset.Zero },
+                            onDragEnd = {
+                                val (dx, dy) = total
+                                when {
+                                    kotlin.math.abs(dx) > kotlin.math.abs(dy) && dx < -swipe -> gesture(Gesture.SWIPE_LEFT)
+                                    kotlin.math.abs(dx) > kotlin.math.abs(dy) && dx > swipe -> gesture(Gesture.SWIPE_RIGHT)
+                                    kotlin.math.abs(dy) > kotlin.math.abs(dx) && dy < -swipe -> gesture(Gesture.SWIPE_UP)
+                                    kotlin.math.abs(dy) > kotlin.math.abs(dx) && dy > swipe -> gesture(Gesture.SWIPE_DOWN)
+                                }
+                            },
+                        ) { change, amount ->
+                            change.consume()
+                            total += amount
+                        }
+                    }
+            )
+            .padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        if (editing) EditHeader(ui)
+
+        val blocks = if (editing) ui.player else ui.player.filter { it.visible }
+        val hasArt = blocks.any { it.type == BlockType.ARTWORK && it.visible }
+        Column(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .then(if (editing) Modifier.verticalScroll(rememberScrollState()) else Modifier),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = if (hasArt || editing) Arrangement.Top else Arrangement.SpaceEvenly,
+        ) {
+            blocks.forEachIndexed { index, block ->
+                val scale = block.size.scale
+                val content: @Composable (Modifier) -> Unit = { m ->
+                    when (block.type) {
+                        BlockType.TOP_BAR -> Row(m.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            val on = dj.config.enabled
+                            Text(
+                                if (mode != null) "${mode!!.label.uppercase()} MODE" else "AUTO DJ",
+                                style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.6.sp),
+                                color = if (on || mode != null) CadenceColors.Background else Dim,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(if (on || mode != null) CadenceColors.TextPrimary else Color.Transparent)
+                                    .border(1.dp, if (on || mode != null) CadenceColors.TextPrimary else CadenceColors.Outline, RoundedCornerShape(2.dp))
+                                    .clickable {
+                                        if (mode != null) {
+                                            vm.exitMode()
+                                            actions.showMessage("Back to your own settings")
+                                        } else {
+                                            AutoDj.updateConfig { it.copy(enabled = !it.enabled) }
+                                            actions.showMessage(if (on) "Auto DJ off" else "Auto DJ on · songs will be mixed")
+                                        }
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                            )
+                            Spacer(Modifier.weight(1f))
+                            LineButton(LineIcons.Dj, "DJ controls") { actions.navigate(Route.Dj) }
+                            LineButton(LineIcons.Visualizer, "Visualizer") { actions.openVisualizer() }
+                            LineButton(LineIcons.Edit, "Customize layout") { UiStore.setEditing(true) }
+                        }
+                        BlockType.ARTWORK -> BoxWithConstraints(
+                            m.fillMaxWidth().padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            val frac = when (block.size) {
+                                BlockSize.S -> 0.55f
+                                BlockSize.M -> 0.8f
+                                BlockSize.L -> 0.92f
+                                BlockSize.XL -> 1f
+                            }
+                            val side = if (editing) maxWidth * frac * 0.6f else minOf(maxWidth * frac, maxHeight)
+                            AnimatedContent(
+                                targetState = song,
+                                transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
+                                contentKey = { it.id },
+                                label = "art",
+                            ) { s ->
+                                AnimatedArtwork(s, block.artStyle, state.isPlaying, analysis, smoothPos, Modifier.size(side))
+                            }
+                        }
+                        BlockType.TITLE -> TitleBlock(
+                            song,
+                            scale,
+                            onArtist = { actions.navigate(Route.ArtistDetail(song.artist)) },
+                            onAlbum = { if (song.albumId > 0) actions.navigate(Route.AlbumDetail(song.albumId)) },
+                        ).let { }
+                        BlockType.INFO -> {
+                            val infoLine = when {
+                                mixing -> dj.plan?.let { p -> vm.songById(p.toId)?.let { "MIXING INTO ${it.title.uppercase()}" } }
+                                analysis != null -> "${"%.1f".format(analysis.bpm).removeSuffix(".0")} BPM · ${analysis.camelot} · ${analysis.keyName}"
+                                else -> if (editing) "BPM · KEY" else null
+                            }
+                            if (infoLine != null) {
+                                Column(m.padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        infoLine,
+                                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.2.sp),
+                                        color = if (mixing) CadenceColors.TextPrimary else Dim,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    if (mixing) {
+                                        Spacer(Modifier.height(6.dp))
+                                        Box(Modifier.width(120.dp).height(1.dp).background(Color(0xFF333333))) {
+                                            Box(Modifier.fillMaxWidth(dj.progress.coerceIn(0f, 1f)).height(1.dp).background(CadenceColors.TextPrimary))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        BlockType.SPECTRUM -> SpectrumBlock(scale, m.padding(vertical = 10.dp))
+                        BlockType.ACTIONS -> Row(
+                            m.fillMaxWidth().padding(top = 14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            block.buttons.forEach { b ->
+                                LineButton(iconFor(b), b.label, active = isActive(b), size = (44 * scale).dp, iconSize = (21 * scale).dp) { press(b) }
+                            }
+                        }
+                        BlockType.SEEK -> Column(m.fillMaxWidth().padding(top = 8.dp)) {
+                            SeekBar(
+                                progress = progress,
+                                onScrub = { scrub = it },
+                                onSeek = { f -> vm.player.seekTo((f * duration).toLong()) },
+                            )
+                            Row(Modifier.fillMaxWidth()) {
+                                val st = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.6.sp, fontSize = (12 * scale).sp)
+                                Text(formatDuration(shownPosition), style = st, fontWeight = FontWeight.Light, color = Dim, modifier = Modifier.weight(1f))
+                                Text(formatDuration(duration), style = st, fontWeight = FontWeight.Light, color = Dim)
+                            }
+                        }
+                        BlockType.TRANSPORT -> Row(
+                            m.fillMaxWidth().padding(top = 12.dp, bottom = 16.dp),
+                            horizontalArrangement = if (block.buttons.size <= 3) Arrangement.SpaceEvenly else Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            block.buttons.forEach { b ->
+                                if (b == PlayerButton.PLAY) {
+                                    PlayCircle(state.isPlaying, state.isBuffering, size = (80 * scale).dp) { press(b) }
+                                } else {
+                                    val main = b == PlayerButton.PREV || b == PlayerButton.NEXT
+                                    LineButton(
+                                        iconFor(b),
+                                        b.label,
+                                        active = isActive(b),
+                                        size = ((if (main) 60 else 44) * scale).dp,
+                                        iconSize = ((if (main) 30 else 21) * scale).dp,
+                                        tint = if (main) CadenceColors.TextPrimary else null,
+                                    ) { press(b) }
+                                }
+                            }
+                        }
+                        BlockType.UP_NEXT -> Box(m.padding(top = 10.dp)) {
+                            UpNextBlock(nextSong) { actions.selectTab(Tab.QUEUE) }
+                        }
+                        BlockType.MODES -> Box(m.padding(vertical = 10.dp)) {
+                            ModesBlock(mode) { picked -> vm.toggleMode(picked) }
+                        }
+                    }
+                }
+                if (editing) {
+                    EditFrame(block, index, ui.player.size, onConfigure = { configuring = block.type }) { content(Modifier) }
+                } else if (block.type == BlockType.ARTWORK) {
+                    content(Modifier.weight(1f))
+                } else {
+                    content(Modifier)
+                }
+            }
+        }
+    }
+
+    if (showInfo) SongInfoDialog(song, onDismiss = { showInfo = false })
+    configuring?.let { type -> BlockConfigSheet(type, onDismiss = { configuring = null }) }
+}
+
+/** Presets and the Done button shown while editing the layout. */
+@Composable
+private fun EditHeader(ui: UiConfig) {
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Customize player", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            MinimalButton("Done", null, { UiStore.setEditing(false) }, primary = true)
+        }
+        Text(
+            "Move, resize, configure or hide each block. Start from a preset:",
+            style = MaterialTheme.typography.bodySmall,
+            color = Dim,
+            modifier = Modifier.padding(vertical = 6.dp),
+        )
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            LayoutPreset.entries.forEach { p ->
+                val sel = p == ui.preset
+                Text(
+                    p.label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (sel) CadenceColors.Background else CadenceColors.TextSecondary,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (sel) CadenceColors.TextPrimary else Color.Transparent)
+                        .border(1.dp, if (sel) CadenceColors.TextPrimary else CadenceColors.Outline, RoundedCornerShape(50))
+                        .clickable { UiStore.applyPreset(p) }
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Dashed frame around a block in edit mode, with move / resize / configure / hide controls. */
+@Composable
+private fun EditFrame(
+    block: Block,
+    index: Int,
+    count: Int,
+    onConfigure: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .drawBehind {
+                drawRoundRect(
+                    color = if (block.visible) Color.White.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.25f),
+                    style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(6.dp.toPx()),
+                )
+            }
+            .padding(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                block.type.label.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (block.visible) CadenceColors.TextPrimary else Dim,
+                modifier = Modifier.weight(1f),
+            )
+            SmallEditButton("↑", index > 0) { UiStore.moveBlock(index, index - 1) }
+            SmallEditButton("↓", index < count - 1) { UiStore.moveBlock(index, index + 1) }
+            if (block.type.sizes) SmallEditButton(block.size.name, true) { UiStore.cycleSize(block.type) }
+            if (block.type.hasButtons || block.type == BlockType.ARTWORK) SmallEditButton("⚙", true, onConfigure)
+            SmallEditButton(if (block.visible) "Hide" else "Show", true) { UiStore.toggleBlock(block.type) }
+        }
+        if (block.visible) {
+            Box(Modifier.fillMaxWidth().graphicsLayer { alpha = 0.9f }) { content() }
+        }
+    }
+}
+
+@Composable
+private fun SmallEditButton(label: String, enabled: Boolean, onClick: () -> Unit) {
+    Text(
+        label,
+        style = MaterialTheme.typography.labelMedium,
+        color = if (enabled) CadenceColors.TextPrimary else Color(0xFF444444),
+        modifier = Modifier
+            .padding(start = 6.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .border(1.dp, if (enabled) CadenceColors.Outline else Color(0xFF222222), RoundedCornerShape(4.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    )
+}
+
+/** Button picker (for button rows) or artwork style picker. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BlockConfigSheet(type: BlockType, onDismiss: () -> Unit) {
+    val ui by UiStore.config.collectAsStateWithLifecycle()
+    val block = ui.player.firstOrNull { it.type == type } ?: return
+    CadenceSheet(onDismiss) {
+        Text(block.type.label, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+        if (type == BlockType.ARTWORK) {
+            ArtStyle.entries.forEach { st ->
+                Row(
+                    Modifier.fillMaxWidth().clickable { UiStore.setArtStyle(st) }.padding(horizontal = 24.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(st.label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    if (st == block.artStyle) Text("✓", color = CadenceColors.TextPrimary)
+                }
+            }
+        } else {
+            Text(
+                "Tap to add or remove. Use the arrows to change the order.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Dim,
+                modifier = Modifier.padding(horizontal = 24.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+            val chosen = block.buttons
+            LazyColumn(Modifier.heightIn(max = 520.dp)) {
+                items(chosen + PlayerButton.entries.filter { it !in chosen }, key = { it.name }) { b ->
+                    val on = b in chosen
+                    val i = chosen.indexOf(b)
+                    Row(
+                        Modifier.fillMaxWidth().clickable { UiStore.toggleButton(type, b) }.padding(horizontal = 24.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(b.icon, null, tint = if (on) CadenceColors.TextPrimary else Dim, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(16.dp))
+                        Text(b.label, style = MaterialTheme.typography.bodyLarge, color = if (on) CadenceColors.TextPrimary else Dim, modifier = Modifier.weight(1f))
+                        if (on) {
+                            SmallEditButton("↑", i > 0) { UiStore.moveButton(type, i, i - 1) }
+                            SmallEditButton("↓", i < chosen.size - 1) { UiStore.moveButton(type, i, i + 1) }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

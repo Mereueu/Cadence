@@ -31,6 +31,33 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+/** Evens out loudness between songs (only ever turns loud songs down, never boosts). */
+object Normalizer {
+    private const val TARGET = 0.11f
+    private var prefs: android.content.SharedPreferences? = null
+
+    @Volatile var enabled = false
+        set(value) {
+            field = value
+            prefs?.edit()?.putBoolean("normalize", value)?.apply()
+        }
+
+    fun load(context: Context) {
+        val p = context.getSharedPreferences("auto_dj", Context.MODE_PRIVATE)
+        prefs = p
+        enabled = p.getBoolean("normalize", false)
+    }
+
+    fun gainFor(songId: Long?): Float {
+        if (!enabled || songId == null) return 1f
+        val a = AnalysisManager.get(songId) ?: run {
+            if (songId > 0) AnalysisManager.requestUrgent(songId)
+            return 1f
+        }
+        return (TARGET / a.loudness.coerceAtLeast(0.01f)).coerceIn(0.35f, 1f)
+    }
+}
+
 /**
  * A simplified two-deck DJ. While deck A (the session's player) plays the current song, deck B
  * preloads the next one, starts it on a phrase boundary, tempo-matched and beat-aligned, mixes
@@ -56,6 +83,8 @@ object AutoDj {
         val maxBars: Int = 16,
         val beatMatch: Boolean = true,
         val maxTempoPct: Int = 8,
+        /** Start incoming songs where the intro ends (no slow build-ups), used by Gym mode. */
+        val skipIntros: Boolean = false,
     )
 
     data class Plan(
@@ -117,7 +146,9 @@ object AutoDj {
             maxBars = p.getInt("max_bars", 16),
             beatMatch = p.getBoolean("beat_match", true),
             maxTempoPct = p.getInt("max_tempo", 8),
+            skipIntros = p.getBoolean("skip_intros", false),
         )
+        Normalizer.load(context)
         main = player
         deck = PlayerFactory.create(context, deckB = true).also {
             it.audioSessionId = audioSessionId
@@ -156,6 +187,7 @@ object AutoDj {
             ?.putInt("max_bars", config.maxBars)
             ?.putBoolean("beat_match", config.beatMatch)
             ?.putInt("max_tempo", config.maxTempoPct)
+            ?.putBoolean("skip_intros", config.skipIntros)
             ?.apply()
         if (phase == Phase.PLANNED || phase == Phase.IDLE) plan = null
         if (!config.enabled && phase == Phase.LOADING) cancelMix()
@@ -239,6 +271,9 @@ object AutoDj {
     private fun tick() {
         val p = main ?: return
         val d = deck ?: return
+        // Loudness normalisation for the current song (and the incoming one while mixing).
+        Decks.fxA.gain = Normalizer.gainFor(p.currentMediaItem?.mediaId?.toLongOrNull())
+        if (phase != Phase.IDLE && phase != Phase.PLANNED) Decks.fxB.gain = Normalizer.gainFor(plan?.toId)
         when (phase) {
             Phase.IDLE, Phase.PLANNED -> planAndPreload(p, d)
             Phase.LOADING -> {
@@ -514,7 +549,11 @@ object AutoDj {
         outStart = outStart.coerceIn(0L, max(0L, latest))
 
         // In point: start B so that its intro ends exactly when the mix ends (its drop lands after A is gone).
-        val wantIn = if (b.introEndMs > 0) b.introEndMs - (bars * b.barMs).toLong() else b.firstDownbeatMs
+        val wantIn = when {
+            cfg.skipIntros && b.introEndMs > 0 -> b.introEndMs
+            b.introEndMs > 0 -> b.introEndMs - (bars * b.barMs).toLong()
+            else -> b.firstDownbeatMs
+        }
         val barsFromFirst = Math.round((max(wantIn, b.firstDownbeatMs) - b.firstDownbeatMs) / b.barMs)
         val inStart = (b.firstDownbeatMs + barsFromFirst * b.barMs).toLong()
 

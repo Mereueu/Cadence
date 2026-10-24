@@ -51,6 +51,36 @@ object SleepTimer {
         }
     }
 
+    /**
+     * Sleep mode: lowers the volume slowly over the whole duration (to ~35 %),
+     * then fades out completely and pauses.
+     */
+    fun startGradual(minutes: Int) {
+        cancel()
+        val duration = minutes * 60_000L
+        _endsAt.value = System.currentTimeMillis() + duration
+        job = scope.launch {
+            val start = System.currentTimeMillis()
+            while (true) {
+                val t = ((System.currentTimeMillis() - start).toFloat() / (duration - FADE_MS)).coerceIn(0f, 1f)
+                PlaybackBridge.player?.let { if (it.isPlaying) it.volume = 1f - t * 0.65f }
+                if (t >= 1f) break
+                delay(5_000)
+            }
+            val player = PlaybackBridge.player
+            if (player != null) {
+                val v0 = player.volume
+                for (i in 1..40) {
+                    player.volume = v0 * (1f - i / 40f)
+                    delay(FADE_MS / 40)
+                }
+                player.pause()
+                player.volume = 1f
+            }
+            _endsAt.value = null
+        }
+    }
+
     fun cancel() {
         job?.cancel()
         job = null

@@ -11,6 +11,7 @@ import com.cadence.player.ui.theme.LineIcons
 
 /** Bottom bar tabs, left to right. "More" is a menu, not a tab. */
 enum class Tab(val label: String, val icon: ImageVector) {
+    HOME("Home", LineIcons.Home),
     QUEUE("Queue", LineIcons.Queue),
     PLAYER("Now playing", LineIcons.NowPlaying),
     FOLDERS("Folders", LineIcons.Folder),
@@ -42,6 +43,7 @@ sealed interface Route {
     data object Equalizer : Route
     data object Settings : Route
     data object Dj : Route
+    data object Themes : Route
 }
 
 class Navigator(private val home: Tab = Tab.PLAYLISTS) {

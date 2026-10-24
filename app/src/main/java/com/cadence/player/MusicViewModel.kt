@@ -22,6 +22,8 @@ import com.cadence.player.data.Settings
 import com.cadence.player.data.Song
 import com.cadence.player.data.SongSort
 import com.cadence.player.audio.AnalysisManager
+import com.cadence.player.modes.ListeningMode
+import com.cadence.player.modes.ModeEngine
 import com.cadence.player.audio.Camelot
 import com.cadence.player.audio.TrackAnalysis
 import com.cadence.player.playback.ArtworkLoader
@@ -105,6 +107,7 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         player.connect()
+        viewModelScope.launch { player.state.collect { keepQueueFull(it) } }
         // Re-scan when the minimum track length setting changes.
         viewModelScope.launch {
             settings.map { it.minDurationSec }.distinctUntilChanged().drop(1).collect {
@@ -219,6 +222,37 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
             startPositionMs = player.currentPositionMs,
             playWhenReady = st.isPlaying,
         )
+    }
+
+    // ---- Listening modes ----
+
+    val mode: StateFlow<ListeningMode?> = ModeEngine.mode
+    private var lastExtend = 0L
+
+    /** One tap: changes queue, interface and playback behaviour together. Tapping the active mode leaves it. */
+    fun toggleMode(m: ListeningMode) {
+        if (ModeEngine.mode.value == m) {
+            exitMode()
+            return
+        }
+        val queue = ModeEngine.activate(m, library.value.songs, playCounts.value, favorites.value)
+        if (queue.isNotEmpty()) play(queue, 0, "${m.label} mode")
+    }
+
+    fun exitMode() = ModeEngine.deactivate()
+
+    /** Party, Walk, Gym and Drive never run dry: more fitting songs are appended near the end. */
+    private fun keepQueueFull(st: com.cadence.player.data.PlayerState) {
+        val m = ModeEngine.mode.value ?: return
+        if (!ModeEngine.keepsQueueFull(m) || st.isRadio || !st.hasMedia) return
+        val pos = st.queue.indexOfFirst { it.index == st.currentIndex }
+        if (pos < 0 || st.queue.size - pos - 1 >= 4) return
+        val now = System.currentTimeMillis()
+        if (now - lastExtend < 15_000) return
+        lastExtend = now
+        val exclude = st.queue.map { it.songId }.toSet()
+        val more = ModeEngine.buildQueue(m, library.value.songs, playCounts.value, favorites.value, exclude, 20)
+        if (more.isNotEmpty()) player.addToQueue(more)
     }
 
     // ---- DJ & analysis ----

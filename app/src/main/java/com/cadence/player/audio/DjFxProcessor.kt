@@ -33,6 +33,8 @@ class DjFxProcessor : BaseAudioProcessor() {
     @Volatile var echoFeedback = 0.55f
     /** Dry signal gain (lets an echo tail ring out while the dry track fades). */
     @Volatile var dryGain = 1f
+    /** Overall gain, used for loudness normalisation (≤ 1). */
+    @Volatile var gain = 1f
 
     fun clearEffects() {
         highPassHz = 0f
@@ -43,7 +45,7 @@ class DjFxProcessor : BaseAudioProcessor() {
     }
 
     private val isNeutral: Boolean
-        get() = highPassHz <= 20f && lowPassHz >= 19000f && bassKill <= 0.001f && echoWet <= 0.001f && dryGain >= 0.999f
+        get() = highPassHz <= 20f && lowPassHz >= 19000f && bassKill <= 0.001f && echoWet <= 0.001f && dryGain >= 0.999f && gain >= 0.999f
 
     private var sampleRate = 44100
     private var channels = 2
@@ -140,6 +142,7 @@ class DjFxProcessor : BaseAudioProcessor() {
         val wet = echoWet
         val fb = echoFeedback.coerceIn(0f, 0.9f)
         val dry = dryGain
+        val g = gain
         val delaySamples = ((echoDelayMs / 1000f) * sampleRate).toInt().coerceIn(1, sampleRate * 2 - 1) * channels
         val echoLen = echo.size
 
@@ -162,7 +165,7 @@ class DjFxProcessor : BaseAudioProcessor() {
                     echoPos++
                     if (echoPos >= echoLen) echoPos = 0
                 }
-                val s = (y * 32768f).coerceIn(-32768f, 32767f)
+                val s = (y * g * 32768f).coerceIn(-32768f, 32767f)
                 out.putShort(s.toInt().toShort())
             }
         }

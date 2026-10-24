@@ -439,6 +439,8 @@ object TrackAnalyzer {
 
         val brightness = if (centroidW > 0) ((centroidSum / centroidW) / (FRAME / 2) * 2.2).toFloat().coerceIn(0f, 1f) else 0.5f
         val meanEnergy = barEnergy.average().toFloat()
+        // Loudness of the loud part (75th percentile of bar RMS), robust against quiet intros.
+        val loudness = sorted[(sorted.size * 0.75).toInt().coerceIn(0, sorted.lastIndex)]
 
         return TrackAnalysis(
             songId = songId,
@@ -457,6 +459,7 @@ object TrackAnalyzer {
             waveMid = waveMid,
             waveHigh = waveHigh,
             barEnergy = barEnergy,
+            loudness = loudness,
         )
     }
 

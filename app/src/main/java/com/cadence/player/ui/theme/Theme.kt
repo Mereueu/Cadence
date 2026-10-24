@@ -7,6 +7,9 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
@@ -16,15 +19,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 object CadenceColors {
-    val Background = Color(0xFF000000)
-    val Surface = Color(0xFF0F0F0F)
-    val SurfaceHigh = Color(0xFF1A1A1A)
-    val SurfaceHighest = Color(0xFF262626)
-    val Outline = Color(0xFF333333)
+    // Backdrop colours are state so switching AMOLED / dark grey recolours the whole app at once.
+    var Background by mutableStateOf(Color(0xFF000000))
+    var Surface by mutableStateOf(Color(0xFF0F0F0F))
+    var SurfaceHigh by mutableStateOf(Color(0xFF1A1A1A))
+    var SurfaceHighest by mutableStateOf(Color(0xFF262626))
+    var Outline by mutableStateOf(Color(0xFF333333))
+    var BarBackground by mutableStateOf(Color(0xFF1C1C1C))
     val TextPrimary = Color(0xFFFFFFFF)
     val TextSecondary = Color(0xFFB3B3B3)
     val TextTertiary = Color(0xFF808080)
-    val BarBackground = Color(0xFF1C1C1C)
+
+    fun applyBackdrop(amoled: Boolean) {
+        if (amoled) {
+            Background = Color(0xFF000000); Surface = Color(0xFF0F0F0F); SurfaceHigh = Color(0xFF1A1A1A)
+            SurfaceHighest = Color(0xFF262626); Outline = Color(0xFF333333); BarBackground = Color(0xFF1C1C1C)
+        } else {
+            Background = Color(0xFF121214); Surface = Color(0xFF1A1A1D); SurfaceHigh = Color(0xFF232327)
+            SurfaceHighest = Color(0xFF2D2D32); Outline = Color(0xFF3C3C42); BarBackground = Color(0xFF18181B)
+        }
+    }
 }
 
 private val Sans = FontFamily.SansSerif

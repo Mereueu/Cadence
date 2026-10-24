@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "themes": [
+    { "name": "Mono", "author": "Cadence", "backdrop": "AMOLED", "accentSource": "FIXED", "accent": "#FFFFFFFF", "description": "Pure black, white lines. The default." },
+    { "name": "Graphite", "author": "Cadence", "backdrop": "DARK", "accentSource": "FIXED", "accent": "#FFE6E6E6", "description": "Soft dark grey, easier on LCD screens." },
+    { "name": "Cover Art", "author": "Cadence", "backdrop": "AMOLED", "accentSource": "ARTWORK", "accent": "#FFFFFFFF", "description": "Accent follows the album art of each song." },
+    { "name": "Material You", "author": "Cadence", "backdrop": "DARK", "accentSource": "WALLPAPER", "accent": "#FFFFFFFF", "description": "Matches your wallpaper (Android 12+)." },
+    { "name": "Night Drive", "author": "Cadence", "backdrop": "AMOLED", "accentSource": "FIXED", "accent": "#FFFFB020", "description": "Amber on black, low glare at night." },
+    { "name": "Deep Ocean", "author": "Cadence", "backdrop": "AMOLED", "accentSource": "FIXED", "accent": "#FF3EA6FF", "description": "Cool blue on true black." },
+    { "name": "Neon Club", "author": "Cadence", "backdrop": "AMOLED", "accentSource": "FIXED", "accent": "#FFFF4D7D", "description": "Hot pink for party mode." },
+    { "name": "Forest", "author": "Cadence", "backdrop": "DARK", "accentSource": "FIXED", "accent": "#FF2ED3A0", "description": "Calm mint on grey, for focus sessions." },
+    { "name": "Ultraviolet", "author": "Cadence", "backdrop": "AMOLED", "accentSource": "FIXED", "accent": "#FF9D7BFF", "description": "Violet glow, pairs with the Nebula visualizer." },
+    { "name": "Ember", "author": "Cadence", "backdrop": "DARK", "accentSource": "FIXED", "accent": "#FFFF6B4A", "description": "Warm coral on charcoal." }
+  ]
+}

@@ -74,6 +74,17 @@ object LineIcons {
     val Pause = line("Pause", "M9 5v14", "M15 5v14", stroke = 1.6f)
     val Stop = line("Stop", "M7 6h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z")
     val Equalizer = line("Equalizer", "M6 20v-6", "M12 20V8", "M18 20v-9")
+    val Back10 = line("Back10", "M4 12a8 8 0 1 0 2.3-5.6", "M4 4v4h4", "M10 10v5", "M13 10h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z")
+    val Forward30 = line("Forward30", "M20 12a8 8 0 1 1-2.3-5.6", "M20 4v4h-4", "M8 10h2.5v2.5h-2M8 15h2.5v-2.5", "M13.5 10h1.5a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z")
+    val Speed = line("Speed", "M12 14l4-4", "M3.3 19a10 10 0 1 1 17.4 0")
+    val Edit = line("Edit", "M4 20h4L19 9l-4-4L4 16z", "M13.5 6.5l4 4")
+    val Home = line("Home", "M3 10.5L12 3l9 7.5", "M5 9v11h14V9", "M10 20v-6h4v6")
+    val Walk = line("Walk", "M12 4a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0", "M10 21l2-6 2 2v4", "M12 15l1-6-3 2-2 3", "M13 9l2 3h3")
+    val Bolt = line("Bolt", "M13 2L4 14h7l-1 8 9-12h-7z")
+    val Car = line("Car", "M5 11l2-5h10l2 5", "M4 11h16v6H4z", "M6.5 17v2M17.5 17v2", "M7 14h.01M17 14h.01")
+    val Focus = line("Focus", "M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0", "M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4")
+    val Party = line("Party", "M4 20l5-14 9 9z", "M14 4l1 2M19 9l2-1M17 3v2M20 5l-1 1")
+    val Palette = line("Palette", "M12 3a9 9 0 1 0 0 18c1 0 1.5-.7 1.5-1.5 0-1-.8-1.4-.8-2.2 0-.8.6-1.3 1.4-1.3H16a5 5 0 0 0 5-5c0-4.4-4-8-9-8z", "M7.5 11.5h.01M10 7.5h.01M14.5 7.5h.01")
     val Visualizer = line("Visualizer", "M2 12h3l2-5 3 10 3-14 3 12 2-3h4")
     val Dj = line(
         "Dj",
