@@ -37,7 +37,17 @@ jobs:
           CADENCE_KEYSTORE_PASSWORD: ${{ secrets.CADENCE_KEYSTORE_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleRelease
+          set -o pipefail
+          ./gradlew --no-daemon assembleRelease 2>&1 | tee build.log
+
+      - name: Report build errors
+        if: failure()
+        run: |
+          errs=$(grep -E "^e: |^w: .*(error)" build.log | head -80 | sed "s|file://$GITHUB_WORKSPACE/||g" | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          [ -n "$errs" ] && echo "::error title=Kotlin errors::$errs"
+          wrong=$(grep -A12 "What went wrong" build.log | head -40 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          [ -n "$wrong" ] && echo "::error title=Gradle::$wrong"
+          true
 
       - name: Rename APK
         run: cp app/build/outputs/apk/release/app-release.apk Cadence-${{ github.run_number }}.apk
