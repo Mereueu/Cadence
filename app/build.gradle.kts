@@ -12,9 +12,19 @@ android {
         applicationId = "com.cadence.player"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
         vectorDrawables { useSupportLibrary = true }
+    }
+
+    signingConfigs {
+        create("cadence") {
+            // Fixed key so every build can be installed as an update over the previous one.
+            storeFile = file("cadence-release.jks")
+            storePassword = "cadence-store-pass"
+            keyAlias = "cadence"
+            keyPassword = "cadence-store-pass"
+        }
     }
 
     buildTypes {
@@ -25,9 +35,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Signed with the debug key so the APK installs straight away.
-            // Swap in your own keystore before publishing to the Play Store.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("cadence")
         }
     }
 

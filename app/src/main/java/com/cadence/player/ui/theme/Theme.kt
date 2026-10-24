@@ -3,7 +3,10 @@ package com.cadence.player.ui.theme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.TextStyle
@@ -67,5 +70,12 @@ fun CadenceTheme(accent: Color, content: @Composable () -> Unit) {
         inverseSurface = CadenceColors.TextPrimary,
         inverseOnSurface = CadenceColors.Background,
     )
-    MaterialTheme(colorScheme = scheme, typography = CadenceTypography, content = content)
+    MaterialTheme(colorScheme = scheme, typography = CadenceTypography) {
+        // Text and icons default to light-on-dark everywhere, not only inside Surfaces.
+        CompositionLocalProvider(
+            LocalContentColor provides CadenceColors.TextPrimary,
+            LocalTextStyle provides CadenceTypography.bodyMedium.copy(color = CadenceColors.TextPrimary),
+            content = content,
+        )
+    }
 }
