@@ -139,8 +139,8 @@ object AutoDj {
         runCatching { deck?.release() }
         deck = null
         main = null
-        Decks.fxA.reset()
-        Decks.fxB.reset()
+        Decks.fxA.clearEffects()
+        Decks.fxB.clearEffects()
         phase = Phase.IDLE
         plan = null
         publish()
@@ -299,7 +299,7 @@ object AutoDj {
             d.prepare()
             d.seekTo(pl.inStartMs)
             d.playWhenReady = false
-            Decks.fxB.reset()
+            Decks.fxB.clearEffects()
             manualFader = null
             applyMix(0f, pl, p, d)
             d.volume = 0f
@@ -351,7 +351,7 @@ object AutoDj {
         val p = main ?: return
         val d = deck ?: return
         val pl = plan ?: return cancelMix()
-        Decks.fxA.reset()
+        Decks.fxA.clearEffects()
         p.volume = 0f
         LiveAudio.deckA.gain = 0f
         d.volume = 1f
@@ -390,8 +390,8 @@ object AutoDj {
         d?.volume = 0f
         d?.playbackParameters = PlaybackParameters(1f)
         p?.volume = 1f
-        Decks.fxA.reset()
-        Decks.fxB.reset()
+        Decks.fxA.clearEffects()
+        Decks.fxB.clearEffects()
         LiveAudio.deckA.gain = 1f
         LiveAudio.deckB.gain = 0f
         manualFader = null

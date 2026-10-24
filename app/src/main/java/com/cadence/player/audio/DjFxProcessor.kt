@@ -34,7 +34,7 @@ class DjFxProcessor : BaseAudioProcessor() {
     /** Dry signal gain (lets an echo tail ring out while the dry track fades). */
     @Volatile var dryGain = 1f
 
-    fun reset() {
+    fun clearEffects() {
         highPassHz = 0f
         lowPassHz = 20000f
         bassKill = 0f
