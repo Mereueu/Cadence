@@ -114,7 +114,7 @@ fun EqualizerScreen(vm: MusicViewModel, onBack: () -> Unit) {
                 onCheckedChange = { AudioEffects.setEnabled(it) },
                 enabled = eq.available,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
+                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
                     checkedTrackColor = accent,
                     uncheckedThumbColor = CadenceColors.TextSecondary,
                     uncheckedTrackColor = CadenceColors.SurfaceHighest,

@@ -45,6 +45,11 @@ object AppStore {
         _recent.value = readIds("recent")
         _playCounts.value = readCounts()
         _settings.value = readSettings()
+        // 1.2.0 switched the look to the Minimal (mono) theme; move old installs over once.
+        if (!prefs.getBoolean("migrated_minimal_theme", false)) {
+            prefs.edit().putBoolean("migrated_minimal_theme", true).apply()
+            updateSettings { it.copy(accent = AccentColor.MONO) }
+        }
     }
 
     // ---- Playlists ----
@@ -146,6 +151,7 @@ object AppStore {
             .putInt("min_duration", s.minDurationSec)
             .putString("song_sort", s.songSort.name)
             .putBoolean("tint_now_playing", s.tintNowPlaying)
+            .putString("di_listen_key", s.diListenKey)
             .apply()
     }
 
@@ -156,6 +162,7 @@ object AppStore {
             minDurationSec = prefs.getInt("min_duration", d.minDurationSec),
             songSort = runCatching { SongSort.valueOf(prefs.getString("song_sort", d.songSort.name)!!) }.getOrDefault(d.songSort),
             tintNowPlaying = prefs.getBoolean("tint_now_playing", d.tintNowPlaying),
+            diListenKey = prefs.getString("di_listen_key", "") ?: "",
         )
     }
 

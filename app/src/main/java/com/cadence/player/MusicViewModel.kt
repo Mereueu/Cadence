@@ -11,7 +11,12 @@ import androidx.lifecycle.viewModelScope
 import com.cadence.player.data.AppStore
 import com.cadence.player.data.Library
 import com.cadence.player.data.MediaRepository
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import com.cadence.player.data.PlayerConnection
+import com.cadence.player.data.RadioRepository
+import com.cadence.player.data.RadioSource
+import com.cadence.player.data.RadioStation
 import com.cadence.player.data.Playlist
 import com.cadence.player.data.Settings
 import com.cadence.player.data.Song
@@ -211,6 +216,69 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun saveQueueAsPlaylist(name: String): Playlist = AppStore.createPlaylist(name, queueSongs().map { it.id })
+
+    // ---- Radio ----
+
+    private val knownStations = MutableStateFlow<Map<String, RadioStation>>(emptyMap())
+    private var radioList: List<RadioStation> = emptyList()
+
+    private val _radioMessages = MutableStateFlow<String?>(null)
+    /** One-off messages about radio (errors, missing key). Consumed with [consumeRadioMessage]. */
+    val radioMessages: StateFlow<String?> = _radioMessages.asStateFlow()
+    fun consumeRadioMessage() { _radioMessages.value = null }
+
+    private val _radioLoading = MutableStateFlow<String?>(null)
+    /** Id of the station currently being tuned in, for a spinner. */
+    val radioLoading: StateFlow<String?> = _radioLoading.asStateFlow()
+
+    val currentRadio: StateFlow<RadioStation?> = combine(player.state, knownStations) { st, map ->
+        st.mediaId?.let { map[it] }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun playRadio(station: RadioStation, list: List<RadioStation> = listOf(station)) {
+        radioList = list
+        knownStations.value = knownStations.value + list.associateBy { it.mediaId }
+        viewModelScope.launch {
+            _radioLoading.value = station.id
+            try {
+                val url = RadioRepository.resolveStream(station, settings.value.diListenKey)
+                val uri = Uri.parse(url)
+                val item = MediaItem.Builder()
+                    .setMediaId(station.mediaId)
+                    .setUri(uri)
+                    .setRequestMetadata(MediaItem.RequestMetadata.Builder().setMediaUri(uri).build())
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle(station.name)
+                            .setArtist(station.subtitle.ifBlank { station.source.label })
+                            .setStation(station.name)
+                            .setArtworkUri(station.imageUrl?.let { Uri.parse(it) })
+                            .setIsPlayable(true)
+                            .build()
+                    )
+                    .build()
+                _queueSource.value = "${station.source.label} radio"
+                player.playItems(listOf(item))
+            } catch (e: Exception) {
+                _radioMessages.value = if (station.source == RadioSource.DIFM && settings.value.diListenKey.isBlank()) {
+                    "Add your DI.fm listen key to play DI.fm channels"
+                } else {
+                    "Couldn't tune in to ${station.name}: ${e.message ?: "network error"}"
+                }
+            } finally {
+                _radioLoading.value = null
+            }
+        }
+    }
+
+    /** Moves to the previous/next station of the list the current one was started from. */
+    fun stepRadio(delta: Int) {
+        val current = currentRadio.value ?: return
+        val list = radioList.ifEmpty { return }
+        val i = list.indexOfFirst { it.id == current.id }
+        if (i < 0) return
+        playRadio(list[(i + delta).mod(list.size)], list)
+    }
 
     fun shuffle(songs: List<Song>, source: String) {
         _queueSource.value = source

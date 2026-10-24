@@ -15,6 +15,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -30,26 +31,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Bedtime
-import androidx.compose.material.icons.rounded.Equalizer
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
-import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.PlaylistAdd
-import androidx.compose.material.icons.rounded.Repeat
-import androidx.compose.material.icons.rounded.RepeatOne
-import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.material.icons.rounded.SkipPrevious
-import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -61,6 +49,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -72,54 +61,64 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
 import com.cadence.player.MusicViewModel
+import com.cadence.player.data.RadioStation
 import com.cadence.player.data.Song
 import com.cadence.player.ui.LocalActions
 import com.cadence.player.ui.Route
 import com.cadence.player.ui.components.ArtImage
 import com.cadence.player.ui.components.EmptyState
-import com.cadence.player.ui.components.MoreButton
 import com.cadence.player.ui.components.SeekBar
 import com.cadence.player.ui.components.formatDuration
 import com.cadence.player.ui.components.rememberArtColor
+import com.cadence.player.ui.screens.StationArt
 import com.cadence.player.ui.theme.CadenceColors
+import com.cadence.player.ui.theme.LineIcons
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalFoundationApi::class)
+private val Dim = Color(0xFF8C8C8C)
+
 @Composable
 fun PlayerScreen(vm: MusicViewModel) {
     val song = vm.currentSong.collectAsStateWithLifecycle().value
+    val radio = vm.currentRadio.collectAsStateWithLifecycle().value
+    val library by vm.library.collectAsStateWithLifecycle()
+    when {
+        song != null -> SongPlayer(vm, song)
+        radio != null -> RadioPlayer(vm, radio)
+        else -> Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.Center) {
+            EmptyState(
+                icon = Icons.Rounded.MusicNote,
+                title = "Nothing playing",
+                message = "Pick a song from Folders, Albums or Playlists, tune in to a station in Radio, or shuffle your whole library.",
+                action = if (library.songs.isNotEmpty()) "Shuffle all songs" else null,
+                onAction = { vm.shuffle(library.songs, "All songs") },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SongPlayer(vm: MusicViewModel, song: Song) {
     val state by vm.player.state.collectAsStateWithLifecycle()
     val position by vm.player.position.collectAsStateWithLifecycle()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val sleepEndsAt by vm.sleepTimerEndsAt.collectAsStateWithLifecycle()
-    val library by vm.library.collectAsStateWithLifecycle()
     val actions = LocalActions.current
-    val accent = MaterialTheme.colorScheme.primary
     val context = LocalContext.current
     var scrub by remember { mutableStateOf<Float?>(null) }
     var showInfo by remember { mutableStateOf(false) }
 
-    if (song == null) {
-        Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.Center) {
-            EmptyState(
-                icon = Icons.Rounded.MusicNote,
-                title = "Nothing playing",
-                message = "Pick a song from Folders, Albums or Playlists, or shuffle your whole library.",
-                action = if (library.songs.isNotEmpty()) "Shuffle all songs" else null,
-                onAction = { vm.shuffle(library.songs, "All songs") },
-            )
-        }
-        return
-    }
-
     val artColor = rememberArtColor(song.art, settings.tintNowPlaying)
     val top by animateColorAsState(
-        if (artColor != null) lerp(CadenceColors.Background, artColor, 0.35f) else CadenceColors.Background,
+        if (artColor != null) lerp(CadenceColors.Background, artColor, 0.3f) else CadenceColors.Background,
         tween(600),
         label = "playerTop",
     )
@@ -137,18 +136,17 @@ fun PlayerScreen(vm: MusicViewModel) {
             .fillMaxSize()
             .background(Brush.verticalGradient(0f to top, 0.6f to CadenceColors.Background))
             .statusBarsPadding()
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // ---- Artwork ----
         BoxWithConstraints(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(top = 24.dp, bottom = 16.dp),
+                .padding(top = 28.dp, bottom = 20.dp),
             contentAlignment = Alignment.Center,
         ) {
-            val side = minOf(maxWidth * 0.94f, maxHeight)
+            val side = minOf(maxWidth, maxHeight)
             AnimatedContent(
                 targetState = song,
                 transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
@@ -177,164 +175,263 @@ fun PlayerScreen(vm: MusicViewModel) {
                             )
                         }
                 ) {
-                    ArtImage(s.art, Modifier.fillMaxSize(), RoundedCornerShape(4.dp), iconSize = 96.dp)
+                    ArtImage(s.art, Modifier.fillMaxSize(), RoundedCornerShape(2.dp), iconSize = 96.dp)
                 }
             }
         }
 
-        // ---- Titles ----
         Text(
             song.title,
             style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
             maxLines = 1,
             modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2000),
         )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            song.artist,
-            style = MaterialTheme.typography.bodyLarge,
-            color = CadenceColors.TextSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.clickable { actions.navigate(Route.ArtistDetail(song.artist)) },
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            song.album,
-            style = MaterialTheme.typography.bodyLarge,
-            color = CadenceColors.TextSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.clickable {
-                if (song.albumId > 0) actions.navigate(Route.AlbumDetail(song.albumId))
-            },
-        )
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                song.artist,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Light,
+                color = CadenceColors.TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .clickable { actions.navigate(Route.ArtistDetail(song.artist)) },
+            )
+            Text(" — ", style = MaterialTheme.typography.bodyMedium, color = CadenceColors.TextTertiary)
+            Text(
+                song.album,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Light,
+                color = CadenceColors.TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .clickable { if (song.albumId > 0) actions.navigate(Route.AlbumDetail(song.albumId)) },
+            )
+        }
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(20.dp))
 
         // ---- Action row ----
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = {
+            LineButton(
+                if (isFavorite) LineIcons.HeartFilled else LineIcons.Heart,
+                if (isFavorite) "Remove from favorites" else "Add to favorites",
+                active = isFavorite,
+            ) {
                 vm.toggleFavorite(song.id)
                 actions.showMessage(if (isFavorite) "Removed from favorites" else "Added to favorites")
-            }) {
-                Icon(
-                    if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                    contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                    tint = if (isFavorite) accent else CadenceColors.TextPrimary,
-                )
             }
-            IconButton(onClick = { showInfo = true }) { Icon(Icons.Rounded.Info, "Song info") }
-            IconButton(onClick = { actions.addToPlaylist(listOf(song)) }) { Icon(Icons.Rounded.PlaylistAdd, "Add to playlist") }
-            MoreButton(onClick = { actions.openSongMenu(song, null) })
+            LineButton(LineIcons.Info, "Song info") { showInfo = true }
+            LineButton(LineIcons.PlaylistAdd, "Add to playlist") { actions.addToPlaylist(listOf(song)) }
+            LineButton(LineIcons.MoreHorizontal, "More options") { actions.openSongMenu(song, null) }
             Spacer(Modifier.weight(1f))
-            IconButton(onClick = actions.openSleepTimer) {
-                Icon(
-                    Icons.Rounded.Bedtime,
-                    "Sleep timer",
-                    tint = if (sleepEndsAt != null) accent else CadenceColors.TextPrimary,
+            LineButton(LineIcons.Sleep, "Sleep timer", active = sleepEndsAt != null, onClick = actions.openSleepTimer)
+            LineButton(
+                if (state.repeatMode == Player.REPEAT_MODE_ONE) LineIcons.RepeatOne else LineIcons.Repeat,
+                "Repeat",
+                active = state.repeatMode != Player.REPEAT_MODE_OFF,
+            ) {
+                vm.player.cycleRepeat()
+                actions.showMessage(
+                    when (state.repeatMode) {
+                        Player.REPEAT_MODE_OFF -> "Repeat queue"
+                        Player.REPEAT_MODE_ALL -> "Repeat this song"
+                        else -> "Repeat off"
+                    }
                 )
             }
-            Box(Modifier.width(1.dp).height(24.dp).background(CadenceColors.Outline))
-            ModeButton(
-                icon = if (state.repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                active = state.repeatMode != Player.REPEAT_MODE_OFF,
-                description = when (state.repeatMode) {
-                    Player.REPEAT_MODE_ONE -> "Repeat one"
-                    Player.REPEAT_MODE_ALL -> "Repeat all"
-                    else -> "Repeat off"
-                },
-                onClick = {
-                    vm.player.cycleRepeat()
-                    actions.showMessage(
-                        when (state.repeatMode) {
-                            Player.REPEAT_MODE_OFF -> "Repeat queue"
-                            Player.REPEAT_MODE_ALL -> "Repeat this song"
-                            else -> "Repeat off"
-                        }
-                    )
-                },
-            )
-            ModeButton(
-                icon = Icons.Rounded.Shuffle,
-                active = state.shuffle,
-                description = "Shuffle",
-                onClick = {
-                    vm.player.toggleShuffle()
-                    actions.showMessage(if (state.shuffle) "Shuffle off" else "Shuffle on")
-                },
-            )
+            LineButton(LineIcons.Shuffle, "Shuffle", active = state.shuffle) {
+                vm.player.toggleShuffle()
+                actions.showMessage(if (state.shuffle) "Shuffle off" else "Shuffle on")
+            }
         }
 
         Spacer(Modifier.height(10.dp))
 
         // ---- Seek ----
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                formatDuration(shownPosition),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.width(48.dp),
-            )
-            SeekBar(
-                progress = progress,
-                onScrub = { scrub = it },
-                onSeek = { f -> vm.player.seekTo((f * duration).toLong()) },
-                modifier = Modifier.weight(1f),
-                inactiveColor = Color.White.copy(alpha = 0.22f),
-            )
-            Text(
-                formatDuration(duration),
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.End,
-                modifier = Modifier.width(48.dp),
-            )
+        SeekBar(
+            progress = progress,
+            onScrub = { scrub = it },
+            onSeek = { f -> vm.player.seekTo((f * duration).toLong()) },
+        )
+        Row(Modifier.fillMaxWidth()) {
+            Text(formatDuration(shownPosition), style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.6.sp), fontWeight = FontWeight.Light, color = Dim, modifier = Modifier.weight(1f))
+            Text(formatDuration(duration), style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.6.sp), fontWeight = FontWeight.Light, color = Dim)
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
 
         // ---- Transport ----
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(bottom = 20.dp),
+                .padding(bottom = 24.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = {
-                val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI)
-            }) { Icon(Icons.Rounded.VolumeUp, "Volume", tint = CadenceColors.TextSecondary) }
-            IconButton(onClick = { vm.player.previous() }, modifier = Modifier.size(64.dp)) {
-                Icon(Icons.Rounded.SkipPrevious, "Previous", modifier = Modifier.size(44.dp))
-            }
-            IconButton(onClick = { vm.player.togglePlayPause() }, modifier = Modifier.size(84.dp)) {
-                Crossfade(state.isPlaying, label = "play") { playing ->
-                    Icon(
-                        if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        contentDescription = if (playing) "Pause" else "Play",
-                        modifier = Modifier.size(68.dp),
-                    )
-                }
-            }
-            IconButton(onClick = { vm.player.next() }, modifier = Modifier.size(64.dp)) {
-                Icon(Icons.Rounded.SkipNext, "Next", modifier = Modifier.size(44.dp))
-            }
-            IconButton(onClick = { actions.navigate(Route.Equalizer) }) {
-                Icon(Icons.Rounded.Equalizer, "Equalizer", tint = CadenceColors.TextSecondary)
-            }
+            LineButton(LineIcons.Volume, "Volume") { showVolume(context) }
+            LineButton(LineIcons.Previous, "Previous", size = 60.dp, iconSize = 30.dp, tint = CadenceColors.TextPrimary) { vm.player.previous() }
+            PlayCircle(playing = state.isPlaying, buffering = state.isBuffering) { vm.player.togglePlayPause() }
+            LineButton(LineIcons.Next, "Next", size = 60.dp, iconSize = 30.dp, tint = CadenceColors.TextPrimary) { vm.player.next() }
+            LineButton(LineIcons.Equalizer, "Equalizer") { actions.navigate(Route.Equalizer) }
         }
     }
 
     if (showInfo) SongInfoDialog(song, onDismiss = { showInfo = false })
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ModeButton(icon: ImageVector, active: Boolean, description: String, onClick: () -> Unit) {
-    val accent = MaterialTheme.colorScheme.primary
-    val tint by animateColorAsState(if (active) accent else CadenceColors.TextPrimary, label = "mode")
-    IconButton(onClick = onClick) { Icon(icon, description, tint = tint) }
+private fun RadioPlayer(vm: MusicViewModel, station: RadioStation) {
+    val state by vm.player.state.collectAsStateWithLifecycle()
+    val sleepEndsAt by vm.sleepTimerEndsAt.collectAsStateWithLifecycle()
+    val loading by vm.radioLoading.collectAsStateWithLifecycle()
+    val actions = LocalActions.current
+    val context = LocalContext.current
+    val nowPlaying = state.streamTitle?.takeIf { it != station.name }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        BoxWithConstraints(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(top = 28.dp, bottom = 20.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            StationArt(station, Modifier.size(minOf(maxWidth, maxHeight)), corner = 2.dp, textSize = 64.sp)
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .border(1.dp, CadenceColors.TextPrimary, RoundedCornerShape(2.dp))
+                    .padding(horizontal = 6.dp, vertical = 1.dp)
+            ) {
+                Text("LIVE", style = MaterialTheme.typography.labelSmall, color = CadenceColors.TextPrimary)
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(
+                station.source.label.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = Dim,
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            station.name,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2000),
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            nowPlaying ?: station.subtitle.ifBlank { "Live stream" },
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Light,
+            color = CadenceColors.TextSecondary,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+
+        Spacer(Modifier.height(28.dp))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF333333)))
+        Spacer(Modifier.height(28.dp))
+
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LineButton(LineIcons.Volume, "Volume") { showVolume(context) }
+            LineButton(LineIcons.Previous, "Previous station", size = 60.dp, iconSize = 30.dp, tint = CadenceColors.TextPrimary) { vm.stepRadio(-1) }
+            PlayCircle(
+                playing = state.isPlaying,
+                buffering = state.isBuffering || loading != null,
+            ) { vm.player.togglePlayPause() }
+            LineButton(LineIcons.Next, "Next station", size = 60.dp, iconSize = 30.dp, tint = CadenceColors.TextPrimary) { vm.stepRadio(1) }
+            LineButton(LineIcons.Sleep, "Sleep timer", active = sleepEndsAt != null, onClick = actions.openSleepTimer)
+        }
+    }
+}
+
+private fun showVolume(context: Context) {
+    val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI)
+}
+
+/** Large hairline circle with a thin play/pause glyph. */
+@Composable
+private fun PlayCircle(playing: Boolean, buffering: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(80.dp)
+            .clip(CircleShape)
+            .border(1.5.dp, CadenceColors.TextPrimary, CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Crossfade(playing, label = "play") { p ->
+            Icon(
+                if (p) LineIcons.Pause else LineIcons.Play,
+                contentDescription = if (p) "Pause" else "Play",
+                tint = CadenceColors.TextPrimary,
+                modifier = Modifier.size(30.dp),
+            )
+        }
+        if (buffering) {
+            CircularProgressIndicator(Modifier.size(80.dp), color = CadenceColors.TextPrimary, strokeWidth = 1.dp)
+        }
+    }
+}
+
+/** Icon-only button of the Minimal theme: grey when idle, white with a short underline when active. */
+@Composable
+private fun LineButton(
+    icon: ImageVector,
+    description: String,
+    active: Boolean = false,
+    size: Dp = 44.dp,
+    iconSize: Dp = 21.dp,
+    tint: Color? = null,
+    onClick: () -> Unit,
+) {
+    val color by animateColorAsState(tint ?: if (active) CadenceColors.TextPrimary else Dim, label = "lineBtn")
+    Column(
+        Modifier
+            .size(size)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(icon, contentDescription = description, tint = color, modifier = Modifier.size(iconSize))
+        if (tint == null) {
+            Spacer(Modifier.height(4.dp))
+            Box(
+                Modifier
+                    .width(12.dp)
+                    .height(1.5.dp)
+                    .background(if (active) CadenceColors.TextPrimary else Color.Transparent)
+            )
+        }
+    }
 }
 
 @Composable
@@ -355,19 +452,19 @@ fun SongInfoDialog(song: Song, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CadenceColors.SurfaceHigh,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(8.dp),
         title = { Text("Song info", style = MaterialTheme.typography.titleLarge) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 rows.forEach { (label, value) ->
                     Column {
-                        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = Dim)
                         Text(value, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close", color = CadenceColors.TextPrimary) } },
     )
 }
 

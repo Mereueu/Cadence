@@ -32,8 +32,14 @@ data class PlayerState(
     val queue: List<QueueEntry> = emptyList(),
     val currentIndex: Int = C.INDEX_UNSET,
     val speed: Float = 1f,
+    /** Raw media id of the current item (also set for radio stations: "radio:…"). */
+    val mediaId: String? = null,
+    /** Title from the live stream's metadata (ICY), e.g. "Artist - Track" on radio. */
+    val streamTitle: String? = null,
+    val error: String? = null,
 ) {
     val hasMedia: Boolean get() = currentId != null
+    val isRadio: Boolean get() = mediaId?.startsWith("radio:") == true
 }
 
 /** Talks to [PlaybackService] through a Media3 [MediaController]. */
@@ -118,6 +124,9 @@ class PlayerConnection(
             queue = order,
             currentIndex = c.currentMediaItemIndex,
             speed = c.playbackParameters.speed,
+            mediaId = c.currentMediaItem?.mediaId,
+            streamTitle = c.mediaMetadata.title?.toString()?.takeIf { it.isNotBlank() },
+            error = c.playerError?.let { e -> e.cause?.message ?: e.message ?: "Playback error" },
         )
         _position.value = c.currentPosition.coerceAtLeast(0L)
     }
@@ -139,6 +148,20 @@ class PlayerConnection(
             if (playWhenReady) c.play()
         }
     }
+
+    /** Plays ready-made media items (used for radio streams). */
+    fun playItems(items: List<MediaItem>) {
+        if (items.isEmpty()) return
+        withController { c ->
+            c.shuffleModeEnabled = false
+            c.repeatMode = Player.REPEAT_MODE_OFF
+            c.setMediaItems(items, 0, C.TIME_UNSET)
+            c.prepare()
+            c.play()
+        }
+    }
+
+    fun stop() = withController { it.stop() }
 
     /** Current position, read straight from the controller. */
     val currentPositionMs: Long get() = controller?.currentPosition ?: _position.value

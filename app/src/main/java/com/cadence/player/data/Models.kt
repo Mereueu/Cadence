@@ -100,6 +100,7 @@ enum class SongSort(val label: String) {
 }
 
 enum class AccentColor(val label: String, val argb: Long) {
+    MONO("Mono", 0xFFFFFFFF),
     GREEN("Green", 0xFF5BE08C),
     CORAL("Coral", 0xFFFF6B4A),
     ROSE("Rose", 0xFFFF4D7D),
@@ -110,8 +111,29 @@ enum class AccentColor(val label: String, val argb: Long) {
 }
 
 data class Settings(
-    val accent: AccentColor = AccentColor.GREEN,
+    val accent: AccentColor = AccentColor.MONO,
     val minDurationSec: Int = 30,
     val songSort: SongSort = SongSort.TITLE,
     val tintNowPlaying: Boolean = false,
+    /** DI.fm Premium listen key, needed to play DI.fm channels in third-party players. */
+    val diListenKey: String = "",
 )
+
+enum class RadioSource(val label: String) {
+    DIFM("DI.fm"),
+    SOMAFM("SomaFM"),
+    WORLD("World"),
+}
+
+/** An internet radio station. [streamUrl] may be a playlist (.pls/.m3u) that is resolved before playing. */
+data class RadioStation(
+    val id: String,
+    val name: String,
+    val subtitle: String,
+    val source: RadioSource,
+    val streamUrl: String,
+    val imageUrl: String? = null,
+    val listeners: Int = 0,
+) {
+    val mediaId: String get() = "radio:$id"
+}

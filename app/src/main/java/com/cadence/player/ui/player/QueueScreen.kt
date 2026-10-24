@@ -215,7 +215,18 @@ fun QueueScreen(vm: MusicViewModel) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(CadenceColors.Outline))
 
         // ---- List ----
-        if (entries.isEmpty()) {
+        val radio by vm.currentRadio.collectAsStateWithLifecycle()
+        if (entries.isEmpty() && radio != null) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                EmptyState(
+                    icon = Icons.Rounded.QueueMusic,
+                    title = "Listening to ${radio?.name}",
+                    message = "Live radio has no queue. Play songs from your library to build one.",
+                    action = "Go to now playing",
+                    onAction = { actions.selectTab(Tab.PLAYER) },
+                )
+            }
+        } else if (entries.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 EmptyState(
                     icon = Icons.Rounded.QueueMusic,

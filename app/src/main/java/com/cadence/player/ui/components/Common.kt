@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.cadence.player.data.Song
 import com.cadence.player.playback.ArtRequest
@@ -165,38 +166,29 @@ fun PlayingBars(playing: Boolean, color: Color, modifier: Modifier = Modifier) {
     }
 }
 
-/** The white rounded "•••" button used on every row. */
+/** The thin "•••" button used on every row (white when the row is the one playing). */
 @Composable
 fun MoreButton(onClick: () -> Unit, modifier: Modifier = Modifier, highlighted: Boolean = false) {
-    val accent = MaterialTheme.colorScheme.primary
     Box(
         modifier
             .size(44.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Box(
-            Modifier
-                .size(width = 26.dp, height = 24.dp)
-                .clip(RoundedCornerShape(7.dp))
-                .background(if (highlighted) accent else CadenceColors.TextPrimary),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Rounded.MoreHoriz,
-                contentDescription = "More",
-                tint = CadenceColors.Background,
-                modifier = Modifier.size(20.dp),
-            )
-        }
+        Icon(
+            com.cadence.player.ui.theme.LineIcons.MoreHorizontal,
+            contentDescription = "More",
+            tint = if (highlighted) MaterialTheme.colorScheme.primary else CadenceColors.TextSecondary,
+            modifier = Modifier.size(22.dp),
+        )
     }
 }
 
 /** Highlight used for the song that is playing: an accent outline around the row. */
 @Composable
 fun Modifier.currentOutline(isCurrent: Boolean): Modifier =
-    if (isCurrent) this.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp)) else this
+    if (isCurrent) this.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(6.dp)) else this
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -220,7 +212,7 @@ fun SongRow(
             .fillMaxWidth()
             .padding(horizontal = 6.dp, vertical = 2.dp)
             .currentOutline(isCurrent)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(6.dp))
             .combinedClickable(onClick = onClick, onLongClick = onMore)
             .padding(start = if (leading != null) 0.dp else 10.dp, end = 2.dp, top = 7.dp, bottom = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -240,12 +232,12 @@ fun SongRow(
             }
         } else {
             Box(Modifier.size(56.dp)) {
-                ArtImage(song.art, Modifier.fillMaxSize(), RoundedCornerShape(4.dp))
+                ArtImage(song.art, Modifier.fillMaxSize(), RoundedCornerShape(2.dp))
                 if (isCurrent) {
                     Box(
                         Modifier
                             .fillMaxSize()
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(RoundedCornerShape(2.dp))
                             .background(Color.Black.copy(alpha = 0.45f)),
                         contentAlignment = Alignment.Center,
                     ) { PlayingBars(isPlaying, Color.White) }
@@ -316,28 +308,40 @@ fun SectionHeader(
 @Composable
 fun PlayShuffleButtons(onPlay: () -> Unit, onShuffle: () -> Unit, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Button(
-            onClick = onPlay,
-            modifier = Modifier.weight(1f).height(48.dp),
-            shape = RoundedCornerShape(14.dp),
-        ) {
-            Icon(Icons.Rounded.PlayArrow, contentDescription = null)
-            Spacer(Modifier.width(6.dp))
-            Text("Play", fontWeight = FontWeight.SemiBold)
+        MinimalButton("Play", com.cadence.player.ui.theme.LineIcons.Play, onPlay, Modifier.weight(1f), primary = true)
+        MinimalButton("Shuffle", com.cadence.player.ui.theme.LineIcons.Shuffle, onShuffle, Modifier.weight(1f))
+    }
+}
+
+/** Hairline-outlined button of the Minimal theme. */
+@Composable
+fun MinimalButton(
+    label: String,
+    icon: ImageVector?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    primary: Boolean = false,
+) {
+    val color = if (primary) CadenceColors.TextPrimary else CadenceColors.TextSecondary
+    Row(
+        modifier
+            .height(46.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .border(1.dp, if (primary) CadenceColors.TextPrimary else CadenceColors.Outline, RoundedCornerShape(4.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(10.dp))
         }
-        FilledTonalButton(
-            onClick = onShuffle,
-            modifier = Modifier.weight(1f).height(48.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.filledTonalButtonColors(
-                containerColor = CadenceColors.SurfaceHigh,
-                contentColor = MaterialTheme.colorScheme.primary,
-            ),
-        ) {
-            Icon(Icons.Rounded.Shuffle, contentDescription = null)
-            Spacer(Modifier.width(6.dp))
-            Text("Shuffle", fontWeight = FontWeight.SemiBold)
-        }
+        Text(
+            label.uppercase(),
+            style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 1.6.sp),
+            color = color,
+        )
     }
 }
 
@@ -360,10 +364,10 @@ fun EmptyState(
             Modifier
                 .size(84.dp)
                 .clip(CircleShape)
-                .background(CadenceColors.SurfaceHigh),
+                .border(1.dp, CadenceColors.Outline, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(38.dp))
+            Icon(icon, contentDescription = null, tint = CadenceColors.TextSecondary, modifier = Modifier.size(34.dp))
         }
         Spacer(Modifier.height(20.dp))
         Text(title, style = MaterialTheme.typography.titleLarge)
@@ -376,7 +380,7 @@ fun EmptyState(
         )
         if (action != null && onAction != null) {
             Spacer(Modifier.height(20.dp))
-            Button(onClick = onAction, shape = RoundedCornerShape(14.dp)) { Text(action) }
+            MinimalButton(action, null, onAction, primary = true)
         }
     }
 }

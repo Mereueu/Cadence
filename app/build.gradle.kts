@@ -12,8 +12,8 @@ android {
         applicationId = "com.cadence.player"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.1.1"
+        versionCode = 6
+        versionName = "1.2.0"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -83,6 +83,7 @@ dependencies {
     val media3 = "1.4.1"
     implementation("androidx.media3:media3-exoplayer:$media3")
     implementation("androidx.media3:media3-session:$media3")
+    implementation("androidx.media3:media3-exoplayer-hls:$media3")
     implementation("androidx.media3:media3-common:$media3")
     implementation("com.google.guava:guava:33.2.1-android")
 

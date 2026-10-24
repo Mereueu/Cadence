@@ -97,6 +97,8 @@ import com.cadence.player.ui.screens.GenreScreen
 import com.cadence.player.ui.screens.GenresScreen
 import com.cadence.player.ui.screens.PlaylistScreen
 import com.cadence.player.ui.screens.PlaylistsScreen
+import com.cadence.player.ui.screens.RadioScreen
+import com.cadence.player.ui.theme.LineIcons
 import com.cadence.player.ui.screens.SearchScreen
 import com.cadence.player.ui.screens.SettingsScreen
 import com.cadence.player.ui.screens.SmartListScreen
@@ -356,6 +358,7 @@ private fun RouteContent(route: Route, vm: MusicViewModel, onBack: () -> Unit) {
             Tab.ARTISTS -> ArtistsScreen(vm)
             Tab.GENRES -> GenresScreen(vm)
             Tab.PLAYLISTS -> PlaylistsScreen(vm)
+            Tab.RADIO -> RadioScreen(vm)
             Tab.SEARCH -> SearchScreen(vm)
         }
         is Route.AlbumDetail -> AlbumScreen(vm, route.albumId, onBack)
@@ -370,33 +373,58 @@ private fun RouteContent(route: Route, vm: MusicViewModel, onBack: () -> Unit) {
 }
 
 private enum class MoreItem(val label: String, val icon: ImageVector) {
-    EQUALIZER("Equalizer", Icons.Rounded.GraphicEq),
-    SLEEP("Sleep timer", Icons.Rounded.Bedtime),
+    EQUALIZER("Equalizer", LineIcons.Equalizer),
+    SLEEP("Sleep timer", LineIcons.Sleep),
     SPEED("Playback speed", Icons.Rounded.Speed),
     RESCAN("Rescan library", Icons.Rounded.Refresh),
     SETTINGS("Settings", Icons.Rounded.Settings),
 }
 
-/** Icon-only tab bar with an accent line above the selected tab, plus a "More" menu. */
+/** Minimal tab bar: thin icons, a hairline on top and a short line under the selected tab. */
 @Composable
 private fun BottomTabs(selected: Tab, onSelect: (Tab) -> Unit, onMore: (MoreItem) -> Unit) {
-    val accent = MaterialTheme.colorScheme.primary
     var moreOpen by remember { mutableStateOf(false) }
-    Row(
+    Column(
         Modifier
             .fillMaxWidth()
-            .background(CadenceColors.BarBackground)
-            .navigationBarsPadding()
-            .height(60.dp)
-            .padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .background(CadenceColors.Background)
     ) {
-        Tab.entries.forEach { tab ->
-            val isSelected = tab == selected
-            val tint by animateColorAsState(
-                if (isSelected) CadenceColors.TextPrimary else CadenceColors.TextTertiary,
-                label = "tabTint",
-            )
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF1F1F1F)))
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .height(60.dp)
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Tab.entries.forEach { tab ->
+                val isSelected = tab == selected
+                val tint by animateColorAsState(
+                    if (isSelected) CadenceColors.TextPrimary else Color(0xFF6E6E6E),
+                    label = "tabTint",
+                )
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { onSelect(tab) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(tab.icon, contentDescription = tab.label, tint = tint, modifier = Modifier.size(23.dp))
+                    Spacer(Modifier.height(6.dp))
+                    Box(
+                        Modifier
+                            .width(14.dp)
+                            .height(1.5.dp)
+                            .background(if (isSelected) CadenceColors.TextPrimary else Color.Transparent)
+                    )
+                }
+            }
             Box(
                 Modifier
                     .weight(1f)
@@ -404,40 +432,21 @@ private fun BottomTabs(selected: Tab, onSelect: (Tab) -> Unit, onMore: (MoreItem
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                    ) { onSelect(tab) },
+                    ) { moreOpen = true },
                 contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .width(30.dp)
-                        .height(3.dp)
-                        .background(if (isSelected) accent else Color.Transparent)
-                )
-                Icon(tab.icon, contentDescription = tab.label, tint = tint, modifier = Modifier.size(26.dp))
-            }
-        }
-        Box(
-            Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) { moreOpen = true },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Rounded.MoreVert, contentDescription = "More", tint = CadenceColors.TextTertiary, modifier = Modifier.size(26.dp))
-            DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
-                MoreItem.entries.forEach { item ->
-                    DropdownMenuItem(
-                        text = { Text(item.label) },
-                        leadingIcon = { Icon(item.icon, null) },
-                        onClick = {
-                            moreOpen = false
-                            onMore(item)
-                        },
-                    )
+                Icon(LineIcons.MoreVertical, contentDescription = "More", tint = Color(0xFF6E6E6E), modifier = Modifier.size(23.dp).padding(bottom = 0.dp))
+                DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
+                    MoreItem.entries.forEach { item ->
+                        DropdownMenuItem(
+                            text = { Text(item.label) },
+                            leadingIcon = { Icon(item.icon, null) },
+                            onClick = {
+                                moreOpen = false
+                                onMore(item)
+                            },
+                        )
+                    }
                 }
             }
         }

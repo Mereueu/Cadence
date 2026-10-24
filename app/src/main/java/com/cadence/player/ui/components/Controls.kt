@@ -186,7 +186,7 @@ fun Pill(
             Icon(
                 icon,
                 contentDescription = null,
-                tint = if (selected) Color.White else CadenceColors.TextSecondary,
+                tint = if (selected) MaterialTheme.colorScheme.onPrimary else CadenceColors.TextSecondary,
                 modifier = Modifier.size(16.dp),
             )
             Spacer(Modifier.width(6.dp))
@@ -194,7 +194,7 @@ fun Pill(
         Text(
             label,
             style = MaterialTheme.typography.labelLarge,
-            color = if (selected) Color.White else CadenceColors.TextPrimary,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else CadenceColors.TextPrimary,
         )
     }
 }
@@ -322,7 +322,7 @@ fun SeekBar(
     onSeek: (Float) -> Unit,
     modifier: Modifier = Modifier,
     activeColor: Color = Color.White,
-    inactiveColor: Color = Color.White.copy(alpha = 0.18f),
+    inactiveColor: Color = Color(0xFF333333),
 ) {
     var dragging by remember { mutableStateOf(false) }
     var dragValue by remember { mutableFloatStateOf(0f) }
@@ -335,7 +335,7 @@ fun SeekBar(
     Canvas(
         modifier
             .fillMaxWidth()
-            .height(28.dp)
+            .height(32.dp)
             .pointerInput(Unit) {
                 detectTapGestures { offset ->
                     val f = (offset.x / size.width).coerceIn(0f, 1f)
@@ -366,12 +366,14 @@ fun SeekBar(
                 )
             }
     ) {
-        val h = trackHeight.toPx()
+        // Hairline track with a thin vertical tick as the thumb.
+        val line = trackHeight.toPx() / 4f
         val y = size.height / 2f
-        val r = CornerRadius(h / 2f)
-        drawRoundRect(inactiveColor, Offset(0f, y - h / 2f), Size(size.width, h), r)
-        drawRoundRect(activeColor, Offset(0f, y - h / 2f), Size(size.width * shown, h), r)
-        drawCircle(activeColor, thumbRadius.toPx(), Offset(size.width * shown, y))
+        drawRect(inactiveColor, Offset(0f, y - line / 2f), Size(size.width, line))
+        drawRect(activeColor, Offset(0f, y - line / 2f), Size(size.width * shown, line))
+        val tickW = 1.5.dp.toPx()
+        val tickH = thumbRadius.toPx() * 2.4f
+        drawRect(activeColor, Offset(size.width * shown - tickW / 2f, y - tickH / 2f), Size(tickW, tickH))
     }
 }
 

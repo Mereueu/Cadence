@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -45,13 +46,15 @@ private val CadenceTypography = Typography(
 
 @Composable
 fun CadenceTheme(accent: Color, content: @Composable () -> Unit) {
+    // Light accents (e.g. Mono white) get dark content on top of them.
+    val onAccent = if (accent.luminance() > 0.55f) Color.Black else Color.White
     val scheme = darkColorScheme(
         primary = accent,
-        onPrimary = Color.White,
+        onPrimary = onAccent,
         primaryContainer = lerp(CadenceColors.SurfaceHigh, accent, 0.25f),
         onPrimaryContainer = CadenceColors.TextPrimary,
         secondary = accent,
-        onSecondary = Color.White,
+        onSecondary = onAccent,
         secondaryContainer = lerp(CadenceColors.SurfaceHigh, accent, 0.18f),
         onSecondaryContainer = CadenceColors.TextPrimary,
         tertiary = accent,

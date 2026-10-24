@@ -1,14 +1,5 @@
 package com.cadence.player.ui
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Album
-import androidx.compose.material.icons.rounded.Folder
-import androidx.compose.material.icons.rounded.LibraryMusic
-import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.PlayCircle
-import androidx.compose.material.icons.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.LocalOffer
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -16,17 +7,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.cadence.player.data.Song
+import com.cadence.player.ui.theme.LineIcons
 
 /** Bottom bar tabs, left to right. "More" is a menu, not a tab. */
 enum class Tab(val label: String, val icon: ImageVector) {
-    QUEUE("Queue", Icons.Rounded.QueueMusic),
-    PLAYER("Now playing", Icons.Rounded.PlayCircle),
-    FOLDERS("Folders", Icons.Rounded.Folder),
-    ALBUMS("Albums", Icons.Rounded.Album),
-    ARTISTS("Artists", Icons.Rounded.Person),
-    GENRES("Genres", Icons.Rounded.LocalOffer),
-    PLAYLISTS("Playlists", Icons.Rounded.LibraryMusic),
-    SEARCH("Search", Icons.Rounded.Search),
+    QUEUE("Queue", LineIcons.Queue),
+    PLAYER("Now playing", LineIcons.NowPlaying),
+    FOLDERS("Folders", LineIcons.Folder),
+    ALBUMS("Albums", LineIcons.Album),
+    ARTISTS("Artists", LineIcons.Artist),
+    GENRES("Genres", LineIcons.Genre),
+    PLAYLISTS("Playlists", LineIcons.Playlists),
+    RADIO("Radio", LineIcons.Radio),
+    SEARCH("Search", LineIcons.Search),
 }
 
 enum class SmartList(val title: String) {

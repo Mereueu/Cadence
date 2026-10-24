@@ -102,14 +102,14 @@ fun SettingsScreen(vm: MusicViewModel, onBack: () -> Unit) {
                         val selected = option == settings.accent
                         Box(
                             Modifier
-                                .size(44.dp)
+                                .size(34.dp)
                                 .clip(CircleShape)
                                 .background(color)
-                                .border(3.dp, if (selected) Color.White else Color.Transparent, CircleShape)
+                                .border(3.dp, if (selected) CadenceColors.Outline else Color.Transparent, CircleShape)
                                 .clickable { vm.updateSettings { it.copy(accent = option) } },
                             contentAlignment = Alignment.Center,
                         ) {
-                            if (selected) Icon(Icons.Rounded.Check, option.label, tint = Color.White)
+                            if (selected) Icon(Icons.Rounded.Check, option.label, tint = if (option == AccentColor.MONO) Color.Black else Color.White)
                         }
                     }
                 }
@@ -305,7 +305,7 @@ private fun SwitchRow(icon: ImageVector, title: String, subtitle: String, checke
             checked = checked,
             onCheckedChange = onChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
+                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
                 checkedTrackColor = accent,
                 uncheckedThumbColor = CadenceColors.TextSecondary,
                 uncheckedTrackColor = CadenceColors.SurfaceHighest,
