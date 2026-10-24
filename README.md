@@ -3,7 +3,7 @@
 An offline music player and DJ app for Android, built with Jetpack Compose and Media3.
 Your music never leaves your phone. The app has no ads, no account and no tracking.
 
-**Current version: 1.5.0**
+**Current version: 1.6.0**
 
 ---
 
@@ -70,11 +70,11 @@ One tap changes the queue, the screen layout and how playback behaves. Tap the m
 | Party | DJ mixing in harmonic order; the music never stops |
 
 ## Visualizer
-Full-screen scenes that react to the music: Nebula, Liquid, Warp, Horizon, Aura and Ambient.
-- **Follows the song:** the visuals change with the song's structure and mood (builds, drops, breakdowns), not just its volume.
-- **Colours:** taken from the song's energy or its album art.
-- **No microphone:** analysis reads the audio directly.
-- **Low-power mode:** for always-on use.
+**MilkDrop**, the classic Winamp visualizer, rendered by [Butterchurn](https://github.com/jberg/butterchurn) (MIT) with its community preset packs, hundreds of presets in all.
+- **Reacts to the music:** it uses the audio the app is playing, with no microphone needed.
+- **Preset changes:** presets change automatically every 15 s to 2 min, or with every new song. Double-tap for a random preset.
+- **Choosing presets:** mark favourites, show favourites only, or search the full list.
+- **Quality:** Battery saver, Balanced or Sharpest.
 
 ## Radio
 - **DI.fm:** all channels, using your own DI.fm Premium listen key (enter it in the Radio tab).

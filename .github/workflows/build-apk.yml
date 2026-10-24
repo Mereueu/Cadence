@@ -32,6 +32,26 @@ jobs:
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/cadence.jks"
           echo "CADENCE_KEYSTORE=$RUNNER_TEMP/cadence.jks" >> "$GITHUB_ENV"
 
+      - name: Fetch MilkDrop visualizer (Butterchurn, MIT)
+        run: |
+          set -e
+          mkdir -p /tmp/bc && cd /tmp/bc
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund butterchurn@2 butterchurn-presets@2
+          dest="$GITHUB_WORKSPACE/app/src/main/assets/milkdrop/lib"
+          mkdir -p "$dest"
+          main=$(ls node_modules/butterchurn/lib/butterchurn.min.js 2>/dev/null || find node_modules/butterchurn -name 'butterchurn*.min.js' | head -1)
+          cp "$main" "$dest/butterchurn.min.js"
+          for f in node_modules/butterchurn-presets/lib/*.min.js; do cp "$f" "$dest/"; done
+          cp node_modules/butterchurn/LICENSE "$dest/LICENSE-butterchurn.txt" 2>/dev/null || true
+          cp node_modules/butterchurn-presets/LICENSE "$dest/LICENSE-butterchurn-presets.txt" 2>/dev/null || true
+          files=$(cd "$dest" && ls *.min.js | sed 's/.*/"&"/' | paste -sd, -)
+          echo "window.MILK_FILES=[$files];" > "$dest/files.js"
+          v1=$(node -p "require('./node_modules/butterchurn/package.json').version")
+          v2=$(node -p "const p=require('./node_modules/butterchurn-presets/package.json'); p.version+' '+p.license")
+          echo "::notice title=MilkDrop::butterchurn $v1 | presets $v2 | files $files"
+          echo "::notice title=MilkDrop API::audioLevels=$(grep -o audioLevels "$dest/butterchurn.min.js" | wc -l) updateAudio=$(grep -o updateAudio "$dest/butterchurn.min.js" | wc -l) size=$(du -sh "$dest" | cut -f1)"
+
       - name: Build release APK
         env:
           CADENCE_KEYSTORE_PASSWORD: ${{ secrets.CADENCE_KEYSTORE_PASSWORD }}

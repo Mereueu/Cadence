@@ -582,7 +582,8 @@ object ManualDj {
             // at volume 0 sharing an audio session can silence the whole output on some phones.
             fx.level = vol
             if (p.volume != 1f) p.volume = 1f
-            if (side == Side.A) LiveAudio.deckA.gain = vol else LiveAudio.deckB.gain = vol
+            // The visualizer tap sits after the effects chain, so it already hears the fader level.
+            if (side == Side.A) LiveAudio.deckA.gain = 1f else LiveAudio.deckB.gain = 1f
 
             val dur = p.duration.takeIf { it != C.TIME_UNSET } ?: d.durationMs
             decks[side] = d.copy(

@@ -115,6 +115,28 @@ object LiveAudio {
         return true
     }
 
+    private val tdA = FloatArray(FFT_SIZE)
+    private val tdB = FloatArray(FFT_SIZE)
+    private val tdBytes = ByteArray(FFT_SIZE)
+
+    /**
+     * The last 1024 samples being heard (both decks mixed), as unsigned bytes centred on 128 and
+     * base64-encoded: the format MilkDrop visuals expect. Returns null when nothing is playing.
+     */
+    @Synchronized
+    fun timeDomainBase64(): String? {
+        if (!enabled) return null
+        val aOk = readWindow(deckA, tdA)
+        val bOk = readWindow(deckB, tdB)
+        if (!aOk && !bOk) return null
+        val ga = deckA.gain; val gb = deckB.gain
+        for (i in 0 until FFT_SIZE) {
+            val v = (if (aOk) tdA[i] * ga else 0f) + (if (bOk) tdB[i] * gb else 0f)
+            tdBytes[i] = ((v.coerceIn(-1f, 1f) * 127f) + 128f).toInt().coerceIn(0, 255).toByte()
+        }
+        return android.util.Base64.encodeToString(tdBytes, android.util.Base64.NO_WRAP)
+    }
+
     /** Computes features for "now" into [frame]. Call from the UI thread once per frame. */
     fun analyze(frame: AudioFrame) {
         if (!enabled) {

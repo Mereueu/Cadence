@@ -11,3 +11,4 @@
 *.apk
 *.keystore
 *.jks
+/app/src/main/assets/milkdrop/lib/
