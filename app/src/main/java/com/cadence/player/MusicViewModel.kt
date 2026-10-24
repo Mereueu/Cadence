@@ -57,9 +57,28 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
     val sortedSongs: StateFlow<List<Song>> = combine(library, settings) { lib, s -> sort(lib.songs, s.songSort) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val currentSong: StateFlow<Song?> = combine(library, player.state) { lib, st ->
-        st.currentId?.let { lib.byId[it] }
+    /** Songs opened from other apps ("Open with Cadence") that are not part of the library. */
+    private val externalSongs = MutableStateFlow<Map<Long, Song>>(emptyMap())
+
+    val currentSong: StateFlow<Song?> = combine(library, player.state, externalSongs) { lib, st, ext ->
+        st.currentId?.let { lib.byId[it] ?: ext[it] }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Plays an audio file handed to us by a file manager or another app. */
+    fun playExternal(uri: Uri) {
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            // A MediaStore link to a song we already know: play it from the library.
+            val known = if (uri.authority == MediaStore.AUTHORITY) {
+                uri.lastPathSegment?.toLongOrNull()?.let { library.value.byId[it] }
+            } else {
+                null
+            }
+            val song = known ?: MediaRepository.songFromUri(app, uri) ?: return@launch
+            if (known == null) externalSongs.value = externalSongs.value + (song.id to song)
+            play(listOf(song), 0, "Opened file")
+        }
+    }
 
     private var observer: ContentObserver? = null
     private var reloadJob: Job? = null

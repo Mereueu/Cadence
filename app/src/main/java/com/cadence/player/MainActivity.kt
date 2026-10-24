@@ -36,7 +36,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
-        if (intent?.getBooleanExtra(EXTRA_OPEN_PLAYER, false) == true) openPlayerRequest.value = true
+        if (intent == null) return
+        if (intent.getBooleanExtra(EXTRA_OPEN_PLAYER, false)) openPlayerRequest.value = true
+        // "Open with Cadence" from a file manager, browser download, messaging app…
+        val data = intent.data
+        if (intent.action == Intent.ACTION_VIEW && data != null) {
+            vm.playExternal(data)
+            openPlayerRequest.value = true
+        }
     }
 
     companion object {

@@ -2,6 +2,9 @@ package com.cadence.player.data
 
 import android.content.ContentUris
 import android.content.Context
+import android.media.MediaMetadataRetriever
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.os.Build
 import android.provider.MediaStore
 import java.io.File
@@ -13,6 +16,13 @@ object MediaRepository {
 
     private const val UNKNOWN_ARTIST = "Unknown artist"
     private const val UNKNOWN_ALBUM = "Unknown album"
+
+    private val LOSSLESS_MIME_TYPES = listOf(
+        "audio/flac", "audio/x-flac",
+        "audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave",
+        "audio/aiff", "audio/x-aiff",
+        "audio/alac", "audio/x-alac",
+    )
 
     suspend fun load(context: Context, minDurationSec: Int): Library = withContext(Dispatchers.IO) {
         val songs = querySongs(context, minDurationSec)
@@ -42,8 +52,20 @@ object MediaRepository {
             if (hasRelativePath) add(MediaStore.Audio.Media.RELATIVE_PATH)
         }.toTypedArray()
 
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} >= ?"
-        val args = arrayOf((minDurationSec * 1000L).toString())
+        // Lossless files (WAV, FLAC, AIFF, ALAC) are often not tagged IS_MUSIC by Android, and some
+        // devices store a 0 duration for them, so they are included explicitly.
+        val lossless = LOSSLESS_MIME_TYPES.joinToString(",") { "?" }
+        val mime = MediaStore.Audio.Media.MIME_TYPE
+        val duration = MediaStore.Audio.Media.DURATION
+        val selection = buildString {
+            append("(${MediaStore.Audio.Media.IS_MUSIC} != 0 OR $mime IN ($lossless) ")
+            append("OR ${MediaStore.Audio.Media.DATA} LIKE '%.flac' OR ${MediaStore.Audio.Media.DATA} LIKE '%.wav')")
+            append(" AND ${MediaStore.Audio.Media.IS_RINGTONE} = 0")
+            append(" AND ${MediaStore.Audio.Media.IS_NOTIFICATION} = 0")
+            append(" AND ${MediaStore.Audio.Media.IS_ALARM} = 0")
+            append(" AND ($duration >= ? OR (($duration IS NULL OR $duration = 0) AND $mime IN ($lossless)))")
+        }
+        val args = (LOSSLESS_MIME_TYPES + (minDurationSec * 1000L).toString() + LOSSLESS_MIME_TYPES).toTypedArray()
         val result = ArrayList<Song>()
 
         val cursor = try {
@@ -88,7 +110,7 @@ object MediaRepository {
                     album = c.getString(albumCol).clean() ?: UNKNOWN_ALBUM,
                     albumId = c.getLong(albumIdCol),
                     albumArtist = albumArtist,
-                    duration = c.getLong(durationCol),
+                    duration = c.getLong(durationCol).takeIf { it > 0 } ?: probeDuration(context, id),
                     track = rawTrack,
                     year = c.getInt(yearCol),
                     dateAdded = c.getLong(addedCol),
@@ -98,6 +120,56 @@ object MediaRepository {
             }
         }
         return result.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+    }
+
+    /** Reads the real length of a file whose MediaStore entry has no duration (common for WAV/FLAC). */
+    private fun probeDuration(context: Context, id: Long): Long {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context, ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id))
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+        } catch (_: Exception) {
+            0L
+        } finally {
+            runCatching { retriever.release() }
+        }
+    }
+
+    /**
+     * Builds a playable song for a file opened from another app ("Open with Cadence").
+     * It gets a negative id so it never clashes with library songs.
+     */
+    suspend fun songFromUri(context: Context, uri: Uri): Song? = withContext(Dispatchers.IO) {
+        var displayName: String? = null
+        runCatching {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) displayName = c.getString(0)
+            }
+        }
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(context, uri)
+            fun meta(key: Int) = retriever.extractMetadata(key)?.trim()?.takeIf { it.isNotEmpty() }
+            val name = displayName ?: uri.lastPathSegment?.substringAfterLast('/') ?: "Audio file"
+            Song(
+                id = -((uri.toString().hashCode().toLong() and 0x7fffffffL) + 1),
+                title = meta(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: name.substringBeforeLast('.'),
+                artist = meta(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: UNKNOWN_ARTIST,
+                album = meta(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: UNKNOWN_ALBUM,
+                albumId = -1L,
+                albumArtist = meta(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST) ?: UNKNOWN_ARTIST,
+                duration = meta(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L,
+                track = 0,
+                year = 0,
+                dateAdded = System.currentTimeMillis() / 1000,
+                folder = "Opened files",
+                uri = uri,
+            )
+        } catch (_: Exception) {
+            null
+        } finally {
+            runCatching { retriever.release() }
+        }
     }
 
     private fun String?.clean(): String? =
