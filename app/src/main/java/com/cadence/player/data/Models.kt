@@ -19,6 +19,9 @@ data class Song(
     val dateAdded: Long,
     val folder: String,
     val uri: Uri,
+    val genre: String = "Unknown genre",
+    val mimeType: String = "",
+    val sizeBytes: Long = 0L,
 ) {
     val art: ArtRequest get() = ArtRequest(albumId, id)
 
@@ -64,6 +67,13 @@ data class Folder(
     val songs: List<Song>,
 )
 
+data class Genre(
+    val name: String,
+    val songs: List<Song>,
+) {
+    val art: ArtRequest? get() = songs.firstOrNull()?.art
+}
+
 data class Playlist(
     val id: String,
     val name: String,
@@ -76,6 +86,7 @@ data class Library(
     val albums: List<Album> = emptyList(),
     val artists: List<Artist> = emptyList(),
     val folders: List<Folder> = emptyList(),
+    val genres: List<Genre> = emptyList(),
 ) {
     val byId: Map<Long, Song> by lazy { songs.associateBy { it.id } }
 }
@@ -89,6 +100,7 @@ enum class SongSort(val label: String) {
 }
 
 enum class AccentColor(val label: String, val argb: Long) {
+    GREEN("Green", 0xFF5BE08C),
     CORAL("Coral", 0xFFFF6B4A),
     ROSE("Rose", 0xFFFF4D7D),
     VIOLET("Violet", 0xFF9D7BFF),
@@ -98,8 +110,8 @@ enum class AccentColor(val label: String, val argb: Long) {
 }
 
 data class Settings(
-    val accent: AccentColor = AccentColor.CORAL,
+    val accent: AccentColor = AccentColor.GREEN,
     val minDurationSec: Int = 30,
     val songSort: SongSort = SongSort.TITLE,
-    val tintNowPlaying: Boolean = true,
+    val tintNowPlaying: Boolean = false,
 )

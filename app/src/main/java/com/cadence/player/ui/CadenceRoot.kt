@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -39,7 +40,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Snackbar
@@ -61,6 +71,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -73,21 +84,26 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cadence.player.MusicViewModel
 import com.cadence.player.R
 import com.cadence.player.data.Song
-import com.cadence.player.ui.player.MiniPlayer
-import com.cadence.player.ui.player.NowPlayingScreen
+import com.cadence.player.ui.player.PlayerScreen
+import com.cadence.player.ui.player.QueueScreen
 import com.cadence.player.ui.screens.AlbumScreen
+import com.cadence.player.ui.screens.AlbumsScreen
 import com.cadence.player.ui.screens.ArtistScreen
+import com.cadence.player.ui.screens.ArtistsScreen
 import com.cadence.player.ui.screens.EqualizerScreen
 import com.cadence.player.ui.screens.FolderScreen
-import com.cadence.player.ui.screens.HomeScreen
-import com.cadence.player.ui.screens.LibraryScreen
+import com.cadence.player.ui.screens.FoldersScreen
+import com.cadence.player.ui.screens.GenreScreen
+import com.cadence.player.ui.screens.GenresScreen
 import com.cadence.player.ui.screens.PlaylistScreen
 import com.cadence.player.ui.screens.PlaylistsScreen
 import com.cadence.player.ui.screens.SearchScreen
 import com.cadence.player.ui.screens.SettingsScreen
 import com.cadence.player.ui.screens.SmartListScreen
 import com.cadence.player.ui.sheets.AddToPlaylistSheet
+import com.cadence.player.ui.sheets.SleepTimerSheet
 import com.cadence.player.ui.sheets.SongMenuSheet
+import com.cadence.player.ui.sheets.SpeedSheet
 import com.cadence.player.ui.theme.CadenceColors
 import com.cadence.player.ui.theme.CadenceTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -225,28 +241,25 @@ private fun PermissionScreen(onGranted: () -> Unit) {
 @Composable
 private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow<Boolean>) {
     val navigator = remember { Navigator() }
-    var playerOpen by rememberSaveable { mutableStateOf(false) }
     var menuFor by remember { mutableStateOf<Pair<Song, PlaylistContext?>?>(null) }
     var addToPlaylistSongs by remember { mutableStateOf<List<Song>?>(null) }
+    var showSleep by remember { mutableStateOf(false) }
+    var showSpeed by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val playerState by vm.player.state.collectAsStateWithLifecycle()
 
     val wantsPlayer by openPlayerRequest.collectAsStateWithLifecycle()
     LaunchedEffect(wantsPlayer) {
         if (wantsPlayer) {
-            playerOpen = true
+            navigator.selectTab(Tab.PLAYER)
             openPlayerRequest.value = false
         }
     }
 
     val actions = remember(navigator) {
         UiActions(
-            navigate = { route ->
-                playerOpen = false
-                navigator.push(route)
-            },
-            openPlayer = { playerOpen = true },
+            navigate = { route -> navigator.push(route) },
+            openPlayer = { navigator.selectTab(Tab.PLAYER) },
             openSongMenu = { song, ctx -> menuFor = song to ctx },
             addToPlaylist = { songs -> if (songs.isNotEmpty()) addToPlaylistSongs = songs },
             showMessage = { msg ->
@@ -255,12 +268,13 @@ private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow
                     snackbar.showSnackbar(msg)
                 }
             },
+            selectTab = { navigator.selectTab(it) },
+            openSleepTimer = { showSleep = true },
+            openSpeed = { showSpeed = true },
         )
     }
 
-    val showPlayer = playerOpen && playerState.hasMedia
-    BackHandler(enabled = !showPlayer && navigator.canGoBack) { navigator.back() }
-    BackHandler(enabled = showPlayer) { playerOpen = false }
+    BackHandler(enabled = navigator.canGoBack) { navigator.back() }
 
     androidx.compose.runtime.CompositionLocalProvider(LocalActions provides actions) {
         Box(Modifier.fillMaxSize()) {
@@ -271,10 +285,10 @@ private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow
                         targetState = navigator.current,
                         transitionSpec = {
                             if (targetState is Route.TabRoot && initialState is Route.TabRoot) {
-                                fadeIn(tween(220)) togetherWith fadeOut(tween(120))
+                                fadeIn(tween(160)) togetherWith fadeOut(tween(90))
                             } else {
-                                (fadeIn(tween(240)) + slideInHorizontally(tween(260)) { it / 10 }) togetherWith
-                                    fadeOut(tween(140))
+                                (fadeIn(tween(220)) + slideInHorizontally(tween(240)) { it / 12 }) togetherWith
+                                    fadeOut(tween(120))
                             }
                         },
                         label = "nav",
@@ -284,16 +298,21 @@ private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow
                         }
                     }
                 }
-                AnimatedVisibility(
-                    visible = playerState.hasMedia,
-                    enter = slideInVertically { it } + fadeIn(),
-                    exit = slideOutVertically { it } + fadeOut(),
-                ) {
-                    MiniPlayer(vm, onOpen = { playerOpen = true })
-                }
-                BottomNav(
+                BottomTabs(
                     selected = navigator.tab,
                     onSelect = { navigator.selectTab(it) },
+                    onMore = { item ->
+                        when (item) {
+                            MoreItem.SETTINGS -> navigator.push(Route.Settings)
+                            MoreItem.EQUALIZER -> navigator.push(Route.Equalizer)
+                            MoreItem.SLEEP -> showSleep = true
+                            MoreItem.SPEED -> showSpeed = true
+                            MoreItem.RESCAN -> {
+                                vm.refreshLibrary()
+                                actions.showMessage("Rescanning your music…")
+                            }
+                        }
+                    },
                 )
             }
 
@@ -302,24 +321,16 @@ private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(bottom = if (playerState.hasMedia) 150.dp else 80.dp),
+                    .padding(bottom = 76.dp),
             ) { data ->
                 Snackbar(
                     data,
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(12.dp),
                     containerColor = CadenceColors.SurfaceHighest,
                     contentColor = CadenceColors.TextPrimary,
                     actionColor = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
-            }
-
-            AnimatedVisibility(
-                visible = showPlayer,
-                enter = slideInVertically(tween(380)) { it } + fadeIn(tween(200)),
-                exit = slideOutVertically(tween(320)) { it } + fadeOut(tween(260)),
-            ) {
-                NowPlayingScreen(vm, onClose = { playerOpen = false })
             }
         }
 
@@ -329,6 +340,8 @@ private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow
         addToPlaylistSongs?.let { songs ->
             AddToPlaylistSheet(vm, songs, onDismiss = { addToPlaylistSongs = null })
         }
+        if (showSleep) SleepTimerSheet(vm, onDismiss = { showSleep = false })
+        if (showSpeed) SpeedSheet(vm, onDismiss = { showSpeed = false })
     }
 }
 
@@ -336,13 +349,18 @@ private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow
 private fun RouteContent(route: Route, vm: MusicViewModel, onBack: () -> Unit) {
     when (route) {
         is Route.TabRoot -> when (route.tab) {
-            Tab.HOME -> HomeScreen(vm)
-            Tab.LIBRARY -> LibraryScreen(vm)
+            Tab.QUEUE -> QueueScreen(vm)
+            Tab.PLAYER -> PlayerScreen(vm)
+            Tab.FOLDERS -> FoldersScreen(vm)
+            Tab.ALBUMS -> AlbumsScreen(vm)
+            Tab.ARTISTS -> ArtistsScreen(vm)
+            Tab.GENRES -> GenresScreen(vm)
             Tab.PLAYLISTS -> PlaylistsScreen(vm)
             Tab.SEARCH -> SearchScreen(vm)
         }
         is Route.AlbumDetail -> AlbumScreen(vm, route.albumId, onBack)
         is Route.ArtistDetail -> ArtistScreen(vm, route.name, onBack)
+        is Route.GenreDetail -> GenreScreen(vm, route.name, onBack)
         is Route.FolderDetail -> FolderScreen(vm, route.path, onBack)
         is Route.PlaylistDetail -> PlaylistScreen(vm, route.id, onBack)
         is Route.SmartDetail -> SmartListScreen(vm, route.list, onBack)
@@ -351,62 +369,74 @@ private fun RouteContent(route: Route, vm: MusicViewModel, onBack: () -> Unit) {
     }
 }
 
+private enum class MoreItem(val label: String, val icon: ImageVector) {
+    EQUALIZER("Equalizer", Icons.Rounded.GraphicEq),
+    SLEEP("Sleep timer", Icons.Rounded.Bedtime),
+    SPEED("Playback speed", Icons.Rounded.Speed),
+    RESCAN("Rescan library", Icons.Rounded.Refresh),
+    SETTINGS("Settings", Icons.Rounded.Settings),
+}
+
+/** Icon-only tab bar with an accent line above the selected tab, plus a "More" menu. */
 @Composable
-private fun BottomNav(selected: Tab, onSelect: (Tab) -> Unit) {
+private fun BottomTabs(selected: Tab, onSelect: (Tab) -> Unit, onMore: (MoreItem) -> Unit) {
     val accent = MaterialTheme.colorScheme.primary
-    Column(
+    var moreOpen by remember { mutableStateOf(false) }
+    Row(
         Modifier
             .fillMaxWidth()
-            .background(CadenceColors.Surface)
+            .background(CadenceColors.BarBackground)
+            .navigationBarsPadding()
+            .height(60.dp)
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(CadenceColors.Outline.copy(alpha = 0.6f)))
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .height(64.dp)
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Tab.entries.forEach { tab ->
-                val isSelected = tab == selected
-                val tint by animateColorAsState(
-                    if (isSelected) accent else CadenceColors.TextTertiary,
-                    label = "tabTint",
-                )
-                val pill by animateColorAsState(
-                    if (isSelected) accent.copy(alpha = 0.16f) else Color.Transparent,
-                    label = "tabPill",
-                )
-                Column(
+        Tab.entries.forEach { tab ->
+            val isSelected = tab == selected
+            val tint by animateColorAsState(
+                if (isSelected) CadenceColors.TextPrimary else CadenceColors.TextTertiary,
+                label = "tabTint",
+            )
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { onSelect(tab) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
                     Modifier
-                        .weight(1f)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) { onSelect(tab) },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Box(
-                        Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(pill)
-                            .padding(horizontal = 18.dp, vertical = 4.dp),
-                    ) {
-                        Icon(
-                            if (isSelected) tab.selectedIcon else tab.icon,
-                            contentDescription = tab.label,
-                            tint = tint,
-                            modifier = Modifier.size(24.dp),
-                        )
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        tab.label,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = tint,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                        .align(Alignment.TopCenter)
+                        .width(30.dp)
+                        .height(3.dp)
+                        .background(if (isSelected) accent else Color.Transparent)
+                )
+                Icon(tab.icon, contentDescription = tab.label, tint = tint, modifier = Modifier.size(26.dp))
+            }
+        }
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) { moreOpen = true },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Rounded.MoreVert, contentDescription = "More", tint = CadenceColors.TextTertiary, modifier = Modifier.size(26.dp))
+            DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
+                MoreItem.entries.forEach { item ->
+                    DropdownMenuItem(
+                        text = { Text(item.label) },
+                        leadingIcon = { Icon(item.icon, null) },
+                        onClick = {
+                            moreOpen = false
+                            onMore(item)
+                        },
                     )
                 }
             }

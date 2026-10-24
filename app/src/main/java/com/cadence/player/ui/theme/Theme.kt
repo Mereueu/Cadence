@@ -15,14 +15,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 object CadenceColors {
-    val Background = Color(0xFF0A0A0E)
-    val Surface = Color(0xFF111117)
-    val SurfaceHigh = Color(0xFF191921)
-    val SurfaceHighest = Color(0xFF22222C)
-    val Outline = Color(0xFF2A2A35)
-    val TextPrimary = Color(0xFFF4F4F7)
-    val TextSecondary = Color(0xFF9B9BAA)
-    val TextTertiary = Color(0xFF6A6A78)
+    val Background = Color(0xFF000000)
+    val Surface = Color(0xFF0F0F0F)
+    val SurfaceHigh = Color(0xFF1A1A1A)
+    val SurfaceHighest = Color(0xFF262626)
+    val Outline = Color(0xFF333333)
+    val TextPrimary = Color(0xFFFFFFFF)
+    val TextSecondary = Color(0xFFB3B3B3)
+    val TextTertiary = Color(0xFF808080)
+    val BarBackground = Color(0xFF1C1C1C)
 }
 
 private val Sans = FontFamily.SansSerif

@@ -12,8 +12,8 @@ android {
         applicationId = "com.cadence.player"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.1.0"
         vectorDrawables { useSupportLibrary = true }
     }
 

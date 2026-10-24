@@ -32,6 +32,15 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+enum class QueueOrder(val label: String) {
+    TITLE("Title"),
+    ARTIST("Artist"),
+    ALBUM("Album"),
+    DURATION("Duration"),
+    REVERSE("Reverse order"),
+    RANDOM("Shuffle once"),
+}
+
 class MusicViewModel(app: Application) : AndroidViewModel(app) {
 
     val player = PlayerConnection(app, viewModelScope)
@@ -169,6 +178,39 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
         _queueSource.value = source
         player.play(songs, index)
     }
+
+    /** Any song we can show, including files opened from other apps. */
+    fun songById(id: Long): Song? = library.value.byId[id] ?: externalSongs.value[id]
+
+    /** Songs of the current queue in their stored order. */
+    fun queueSongs(): List<Song> =
+        player.state.value.queue.sortedBy { it.index }.mapNotNull { songById(it.songId) }
+
+    /** Re-orders the whole queue without interrupting the song that is playing. */
+    fun sortQueue(order: QueueOrder) {
+        val st = player.state.value
+        val songs = queueSongs()
+        if (songs.size < 2) return
+        val currentId = st.currentId
+        val sorted = when (order) {
+            QueueOrder.TITLE -> songs.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+            QueueOrder.ARTIST -> songs.sortedWith(compareBy<Song, String>(String.CASE_INSENSITIVE_ORDER) { it.artist }.thenBy { it.album }.thenBy { it.track })
+            QueueOrder.ALBUM -> songs.sortedWith(compareBy<Song, String>(String.CASE_INSENSITIVE_ORDER) { it.album }.thenBy { it.track })
+            QueueOrder.DURATION -> songs.sortedBy { it.duration }
+            QueueOrder.REVERSE -> songs.reversed()
+            QueueOrder.RANDOM -> songs.shuffled()
+        }
+        val index = sorted.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
+        player.play(
+            sorted,
+            index,
+            shuffle = false,
+            startPositionMs = player.currentPositionMs,
+            playWhenReady = st.isPlaying,
+        )
+    }
+
+    fun saveQueueAsPlaylist(name: String): Playlist = AppStore.createPlaylist(name, queueSongs().map { it.id })
 
     fun shuffle(songs: List<Song>, source: String) {
         _queueSource.value = source

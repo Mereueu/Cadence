@@ -124,15 +124,24 @@ class PlayerConnection(
 
     // ---- Commands ----
 
-    fun play(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false) {
+    fun play(
+        songs: List<Song>,
+        startIndex: Int = 0,
+        shuffle: Boolean = false,
+        startPositionMs: Long = 0L,
+        playWhenReady: Boolean = true,
+    ) {
         if (songs.isEmpty()) return
         withController { c ->
             c.shuffleModeEnabled = shuffle
-            c.setMediaItems(songs.map { it.toMediaItem() }, startIndex.coerceIn(0, songs.lastIndex), 0L)
+            c.setMediaItems(songs.map { it.toMediaItem() }, startIndex.coerceIn(0, songs.lastIndex), startPositionMs)
             c.prepare()
-            c.play()
+            if (playWhenReady) c.play()
         }
     }
+
+    /** Current position, read straight from the controller. */
+    val currentPositionMs: Long get() = controller?.currentPosition ?: _position.value
 
     fun shuffleAll(songs: List<Song>) {
         if (songs.isEmpty()) return

@@ -1,14 +1,14 @@
 package com.cadence.player.ui
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.LibraryMusic
-import androidx.compose.material.icons.outlined.QueueMusic
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.LocalOffer
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -17,24 +17,32 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.cadence.player.data.Song
 
-enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
-    HOME("Home", Icons.Outlined.Home, Icons.Rounded.Home),
-    LIBRARY("Library", Icons.Outlined.LibraryMusic, Icons.Rounded.LibraryMusic),
-    PLAYLISTS("Playlists", Icons.Outlined.QueueMusic, Icons.Rounded.QueueMusic),
-    SEARCH("Search", Icons.Outlined.Search, Icons.Rounded.Search),
+/** Bottom bar tabs, left to right. "More" is a menu, not a tab. */
+enum class Tab(val label: String, val icon: ImageVector) {
+    QUEUE("Queue", Icons.Rounded.QueueMusic),
+    PLAYER("Now playing", Icons.Rounded.PlayCircle),
+    FOLDERS("Folders", Icons.Rounded.Folder),
+    ALBUMS("Albums", Icons.Rounded.Album),
+    ARTISTS("Artists", Icons.Rounded.Person),
+    GENRES("Genres", Icons.Rounded.LocalOffer),
+    PLAYLISTS("Playlists", Icons.Rounded.LibraryMusic),
+    SEARCH("Search", Icons.Rounded.Search),
 }
 
 enum class SmartList(val title: String) {
+    ALL_SONGS("All songs"),
     FAVORITES("Favorites"),
+    RECENTLY_ADDED("Recently added"),
     RECENTLY_PLAYED("Recently played"),
     MOST_PLAYED("Most played"),
-    RECENTLY_ADDED("Recently added"),
+    NOT_PLAYED("Not played"),
 }
 
 sealed interface Route {
     data class TabRoot(val tab: Tab) : Route
     data class AlbumDetail(val albumId: Long) : Route
     data class ArtistDetail(val name: String) : Route
+    data class GenreDetail(val name: String) : Route
     data class FolderDetail(val path: String) : Route
     data class PlaylistDetail(val id: String) : Route
     data class SmartDetail(val list: SmartList) : Route
@@ -42,13 +50,13 @@ sealed interface Route {
     data object Settings : Route
 }
 
-class Navigator {
-    var tab by mutableStateOf(Tab.HOME)
+class Navigator(private val home: Tab = Tab.PLAYLISTS) {
+    var tab by mutableStateOf(home)
         private set
-    val stack = mutableStateListOf<Route>(Route.TabRoot(Tab.HOME))
+    val stack = mutableStateListOf<Route>(Route.TabRoot(home))
 
     val current: Route get() = stack.last()
-    val canGoBack: Boolean get() = stack.size > 1 || tab != Tab.HOME
+    val canGoBack: Boolean get() = stack.size > 1 || tab != home
 
     fun selectTab(newTab: Tab) {
         if (newTab == tab && stack.size > 1) {
@@ -70,8 +78,8 @@ class Navigator {
         stack.size > 1 -> {
             stack.removeAt(stack.lastIndex); true
         }
-        tab != Tab.HOME -> {
-            selectTab(Tab.HOME); true
+        tab != home -> {
+            selectTab(home); true
         }
         else -> false
     }
@@ -87,6 +95,9 @@ class UiActions(
     val openSongMenu: (Song, PlaylistContext?) -> Unit,
     val addToPlaylist: (List<Song>) -> Unit,
     val showMessage: (String) -> Unit,
+    val selectTab: (Tab) -> Unit = {},
+    val openSleepTimer: () -> Unit = {},
+    val openSpeed: () -> Unit = {},
 )
 
 val LocalActions = compositionLocalOf<UiActions> { error("UiActions not provided") }

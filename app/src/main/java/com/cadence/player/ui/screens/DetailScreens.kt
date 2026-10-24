@@ -26,6 +26,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AddCircleOutline
+import androidx.compose.material.icons.rounded.Block
+import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.LocalOffer
+import androidx.compose.material.icons.rounded.Whatshot
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.DragHandle
@@ -195,7 +200,7 @@ private fun CollectionScreen(
                         onClick = { vm.play(songs, i, source) },
                         onMore = { actions.openSongMenu(song, null) },
                         trackNumber = if (trackNumbers) song.track % 1000 else null,
-                        subtitle = if (trackNumbers) song.artist else "${song.artist} · ${song.album}",
+                        subtitle = song.artist,
                     )
                 }
             }
@@ -294,6 +299,30 @@ fun ArtistScreen(vm: MusicViewModel, name: String, onBack: () -> Unit) {
                 }
             }
             item(key = "songsHeader") { SectionHeader("Songs") }
+        },
+    )
+}
+
+@Composable
+fun GenreScreen(vm: MusicViewModel, name: String, onBack: () -> Unit) {
+    val actions = LocalActions.current
+    val library by vm.library.collectAsStateWithLifecycle()
+    val genre = library.genres.firstOrNull { it.name == name } ?: return NotFound(onBack)
+    val accent = MaterialTheme.colorScheme.primary
+    CollectionScreen(
+        vm = vm,
+        title = genre.name,
+        eyebrow = "Genre",
+        meta = collectionMeta(genre.songs),
+        songs = genre.songs,
+        source = genre.name,
+        onBack = onBack,
+        art = { m -> IconArt(Icons.Rounded.LocalOffer, accent, m) },
+        tintFrom = null,
+        topActions = {
+            IconButton(onClick = { actions.addToPlaylist(genre.songs) }) {
+                Icon(Icons.Rounded.PlaylistAdd, "Add to playlist")
+            }
         },
     )
 }
@@ -490,6 +519,8 @@ fun SmartListScreen(vm: MusicViewModel, list: SmartList, onBack: () -> Unit) {
 
     val songs = remember(list, library, favorites, recent, playCounts) {
         when (list) {
+            SmartList.ALL_SONGS -> library.songs
+            SmartList.NOT_PLAYED -> library.songs.filter { (playCounts[it.id] ?: 0) == 0 }
             SmartList.FAVORITES -> favorites.mapNotNull { library.byId[it] }
             SmartList.RECENTLY_PLAYED -> recent.mapNotNull { library.byId[it] }.take(100)
             SmartList.MOST_PLAYED -> playCounts.entries.sortedByDescending { it.value }.mapNotNull { library.byId[it.key] }.take(100)
@@ -498,6 +529,8 @@ fun SmartListScreen(vm: MusicViewModel, list: SmartList, onBack: () -> Unit) {
     }
     val (icon, color) = smartStyle(list)
     val emptyMessage = when (list) {
+        SmartList.ALL_SONGS -> "Songs on this device will appear here."
+        SmartList.NOT_PLAYED -> "You've played every song. Impressive."
         SmartList.FAVORITES -> "Tap the heart on any song to save it here."
         SmartList.RECENTLY_PLAYED -> "Songs you play will show up here."
         SmartList.MOST_PLAYED -> "Your most-played songs will collect here over time."
@@ -541,9 +574,11 @@ fun SmartListScreen(vm: MusicViewModel, list: SmartList, onBack: () -> Unit) {
 }
 
 fun smartStyle(list: SmartList): Pair<ImageVector, Color> = when (list) {
+    SmartList.ALL_SONGS -> Icons.Rounded.LibraryMusic to Color(0xFF5BE08C)
+    SmartList.NOT_PLAYED -> Icons.Rounded.Block to Color(0xFF9D7BFF)
     SmartList.FAVORITES -> Icons.Rounded.Favorite to Color(0xFFFF4D7D)
     SmartList.RECENTLY_PLAYED -> Icons.Rounded.History to Color(0xFF3EA6FF)
-    SmartList.MOST_PLAYED -> Icons.Rounded.TrendingUp to Color(0xFF2ED3A0)
-    SmartList.RECENTLY_ADDED -> Icons.Rounded.NewReleases to Color(0xFFFFB020)
+    SmartList.MOST_PLAYED -> Icons.Rounded.Whatshot to Color(0xFFFF6B4A)
+    SmartList.RECENTLY_ADDED -> Icons.Rounded.AddCircleOutline to Color(0xFFFFB020)
 }
 

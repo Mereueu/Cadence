@@ -16,6 +16,7 @@ object MediaRepository {
 
     private const val UNKNOWN_ARTIST = "Unknown artist"
     private const val UNKNOWN_ALBUM = "Unknown album"
+    private const val UNKNOWN_GENRE = "Unknown genre"
 
     private val LOSSLESS_MIME_TYPES = listOf(
         "audio/flac", "audio/x-flac",
@@ -49,7 +50,10 @@ object MediaRepository {
             add(MediaStore.Audio.Media.DATE_ADDED)
             add(MediaStore.Audio.Media.DATA)
             add("album_artist")
+            add(MediaStore.Audio.Media.MIME_TYPE)
+            add(MediaStore.Audio.Media.SIZE)
             if (hasRelativePath) add(MediaStore.Audio.Media.RELATIVE_PATH)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) add(MediaStore.Audio.Media.GENRE)
         }.toTypedArray()
 
         // Lossless files (WAV, FLAC, AIFF, ALAC) are often not tagged IS_MUSIC by Android, and some
@@ -71,8 +75,8 @@ object MediaRepository {
         val cursor = try {
             context.contentResolver.query(collection, projection, selection, args, null)
         } catch (_: Exception) {
-            // Some devices lack album_artist; retry without it.
-            val fallback = projection.filter { it != "album_artist" }.toTypedArray()
+            // Some devices lack album_artist or genre; retry without them.
+            val fallback = projection.filter { it != "album_artist" && it != "genre" }.toTypedArray()
             context.contentResolver.query(collection, fallback, selection, args, null)
         } ?: return result
 
@@ -89,6 +93,9 @@ object MediaRepository {
             val dataCol = c.getColumnIndex(MediaStore.Audio.Media.DATA)
             val albumArtistCol = c.getColumnIndex("album_artist")
             val relCol = if (hasRelativePath) c.getColumnIndex(MediaStore.Audio.Media.RELATIVE_PATH) else -1
+            val mimeCol = c.getColumnIndex(MediaStore.Audio.Media.MIME_TYPE)
+            val sizeCol = c.getColumnIndex(MediaStore.Audio.Media.SIZE)
+            val genreCol = c.getColumnIndex("genre")
 
             while (c.moveToNext()) {
                 val id = c.getLong(idCol)
@@ -116,6 +123,9 @@ object MediaRepository {
                     dateAdded = c.getLong(addedCol),
                     folder = folder,
                     uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id),
+                    genre = (if (genreCol >= 0) c.getString(genreCol).clean() else null) ?: UNKNOWN_GENRE,
+                    mimeType = (if (mimeCol >= 0) c.getString(mimeCol) else null) ?: "",
+                    sizeBytes = if (sizeCol >= 0) c.getLong(sizeCol) else 0L,
                 )
             }
         }
@@ -211,6 +221,10 @@ object MediaRepository {
             }
             .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
 
-        return Library(songs = songs, albums = albums, artists = artists, folders = folders)
+        val genres = songs.groupBy { it.genre }
+            .map { (name, list) -> Genre(name, list.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })) }
+            .sortedWith(compareBy<Genre> { it.name == UNKNOWN_GENRE }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+
+        return Library(songs = songs, albums = albums, artists = artists, folders = folders, genres = genres)
     }
 }

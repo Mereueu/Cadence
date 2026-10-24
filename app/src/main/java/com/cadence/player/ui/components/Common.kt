@@ -7,6 +7,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,7 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Shuffle
@@ -164,6 +165,39 @@ fun PlayingBars(playing: Boolean, color: Color, modifier: Modifier = Modifier) {
     }
 }
 
+/** The white rounded "•••" button used on every row. */
+@Composable
+fun MoreButton(onClick: () -> Unit, modifier: Modifier = Modifier, highlighted: Boolean = false) {
+    val accent = MaterialTheme.colorScheme.primary
+    Box(
+        modifier
+            .size(44.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .size(width = 26.dp, height = 24.dp)
+                .clip(RoundedCornerShape(7.dp))
+                .background(if (highlighted) accent else CadenceColors.TextPrimary),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Rounded.MoreHoriz,
+                contentDescription = "More",
+                tint = CadenceColors.Background,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+/** Highlight used for the song that is playing: an accent outline around the row. */
+@Composable
+fun Modifier.currentOutline(isCurrent: Boolean): Modifier =
+    if (isCurrent) this.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp)) else this
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SongRow(
@@ -174,36 +208,44 @@ fun SongRow(
     onMore: () -> Unit,
     modifier: Modifier = Modifier,
     trackNumber: Int? = null,
-    subtitle: String = "${song.artist} · ${song.album}",
+    subtitle: String = song.artist,
+    detail: String = song.album,
+    leading: (@Composable () -> Unit)? = null,
 ) {
     val accent = MaterialTheme.colorScheme.primary
+    val primary = if (isCurrent) accent else CadenceColors.TextPrimary
+    val secondary = if (isCurrent) accent else CadenceColors.TextSecondary
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+            .currentOutline(isCurrent)
+            .clip(RoundedCornerShape(10.dp))
             .combinedClickable(onClick = onClick, onLongClick = onMore)
-            .padding(start = 16.dp, end = 4.dp, top = 7.dp, bottom = 7.dp),
+            .padding(start = if (leading != null) 0.dp else 10.dp, end = 2.dp, top = 7.dp, bottom = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        leading?.invoke()
         if (trackNumber != null) {
-            Box(Modifier.width(32.dp), contentAlignment = Alignment.CenterStart) {
+            Box(Modifier.width(34.dp), contentAlignment = Alignment.CenterStart) {
                 if (isCurrent) {
                     PlayingBars(isPlaying, accent)
                 } else {
                     Text(
                         if (trackNumber > 0) trackNumber.toString() else "–",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = CadenceColors.TextTertiary,
                     )
                 }
             }
         } else {
-            Box(Modifier.size(50.dp)) {
-                ArtImage(song.art, Modifier.fillMaxSize(), RoundedCornerShape(8.dp))
+            Box(Modifier.size(56.dp)) {
+                ArtImage(song.art, Modifier.fillMaxSize(), RoundedCornerShape(4.dp))
                 if (isCurrent) {
                     Box(
                         Modifier
                             .fillMaxSize()
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(4.dp))
                             .background(Color.Black.copy(alpha = 0.45f)),
                         contentAlignment = Alignment.Center,
                     ) { PlayingBars(isPlaying, Color.White) }
@@ -214,29 +256,38 @@ fun SongRow(
         Column(Modifier.weight(1f)) {
             Text(
                 song.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = if (isCurrent) accent else CadenceColors.TextPrimary,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal,
+                color = primary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(2.dp))
             Text(
                 subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = CadenceColors.TextSecondary,
+                style = MaterialTheme.typography.bodyMedium,
+                color = secondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    detail,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = secondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    formatDuration(song.duration),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = secondary,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
         }
-        Text(
-            formatDuration(song.duration),
-            style = MaterialTheme.typography.bodySmall,
-            color = CadenceColors.TextTertiary,
-            modifier = Modifier.padding(start = 8.dp),
-        )
-        IconButton(onClick = onMore) {
-            Icon(Icons.Rounded.MoreVert, contentDescription = "More", tint = CadenceColors.TextSecondary)
-        }
+        Spacer(Modifier.width(6.dp))
+        MoreButton(onMore, highlighted = isCurrent)
     }
 }
 
