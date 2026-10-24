@@ -87,6 +87,7 @@ private suspend fun fetchCommunityThemes(): List<CommunityTheme> = withContext(D
 }
 
 /** Themes, layouts, tabs and gestures in one place. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ThemeGalleryScreen(vm: MusicViewModel, onBack: () -> Unit) {
     val actions = LocalActions.current
