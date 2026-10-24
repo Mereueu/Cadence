@@ -331,6 +331,8 @@ fun SeekBar(
     val shown = if (dragging) dragValue else progress.coerceIn(0f, 1f)
     val trackHeight by animateDpAsState(if (dragging) 6.dp else 4.dp, label = "track")
     val thumbRadius by animateDpAsState(if (dragging) 9.dp else 6.dp, label = "thumb")
+    val uiStyle = com.cadence.player.ui.theme.LocalUiStyle.current
+    val accent = MaterialTheme.colorScheme.primary
 
     Canvas(
         modifier
@@ -366,14 +368,58 @@ fun SeekBar(
                 )
             }
     ) {
-        // Hairline track with a thin vertical tick as the thumb.
-        val line = trackHeight.toPx() / 4f
         val y = size.height / 2f
-        drawRect(inactiveColor, Offset(0f, y - line / 2f), Size(size.width, line))
-        drawRect(activeColor, Offset(0f, y - line / 2f), Size(size.width * shown, line))
-        val tickW = 1.5.dp.toPx()
-        val tickH = thumbRadius.toPx() * 2.4f
-        drawRect(activeColor, Offset(size.width * shown - tickW / 2f, y - tickH / 2f), Size(tickW, tickH))
+        val x = size.width * shown
+        when (uiStyle) {
+            com.cadence.player.ui.theme.UiStyle.MINIMAL -> {
+                // Hairline track with a thin vertical tick as the thumb.
+                val line = trackHeight.toPx() / 4f
+                drawRect(inactiveColor, Offset(0f, y - line / 2f), Size(size.width, line))
+                drawRect(activeColor, Offset(0f, y - line / 2f), Size(x, line))
+                val tickW = 1.5.dp.toPx()
+                val tickH = thumbRadius.toPx() * 2.4f
+                drawRect(activeColor, Offset(x - tickW / 2f, y - tickH / 2f), Size(tickW, tickH))
+            }
+            com.cadence.player.ui.theme.UiStyle.NEON -> {
+                val h = 4.dp.toPx()
+                val cr = androidx.compose.ui.geometry.CornerRadius(h / 2f)
+                drawRoundRect(Color(0xFF1F1F1F), Offset(0f, y - h / 2f), Size(size.width, h), cr)
+                drawRoundRect(accent.copy(alpha = 0.35f), Offset(0f, y - h * 1.5f), Size(x, h * 3f), androidx.compose.ui.geometry.CornerRadius(h * 1.5f))
+                drawRoundRect(accent, Offset(0f, y - h / 2f), Size(x, h), cr)
+                val r = 8.dp.toPx()
+                drawCircle(androidx.compose.ui.graphics.Brush.radialGradient(listOf(accent.copy(alpha = 0.55f), Color.Transparent), Offset(x, y), r * 2.2f), r * 2.2f, Offset(x, y))
+                drawCircle(accent, r, Offset(x, y))
+            }
+            com.cadence.player.ui.theme.UiStyle.SOLID -> {
+                val h = 8.dp.toPx()
+                val cr = androidx.compose.ui.geometry.CornerRadius(h / 2f)
+                drawRoundRect(Color(0xFF262626), Offset(0f, y - h / 2f), Size(size.width, h), cr)
+                drawRoundRect(accent, Offset(0f, y - h / 2f), Size(x.coerceAtLeast(h), h), cr)
+                drawCircle(Color.Black.copy(alpha = 0.5f), 10.dp.toPx(), Offset(x, y + 2.dp.toPx()))
+                drawCircle(Color.White, 10.dp.toPx(), Offset(x, y))
+            }
+            com.cadence.player.ui.theme.UiStyle.GLASS -> {
+                val h = trackHeight.toPx() * 1.5f
+                val cr = androidx.compose.ui.geometry.CornerRadius(h / 2f)
+                drawRoundRect(Color.White.copy(alpha = 0.18f), Offset(0f, y - h / 2f), Size(size.width, h), cr)
+                drawRoundRect(Color.White, Offset(0f, y - h / 2f), Size(x.coerceAtLeast(h), h), cr)
+                if (dragging) drawCircle(Color.White, 8.dp.toPx(), Offset(x, y))
+            }
+            com.cadence.player.ui.theme.UiStyle.HIFI -> {
+                // 24 LED segments.
+                val n = 24
+                val gap = 2.dp.toPx()
+                val segW = (size.width - gap * (n - 1)) / n
+                val h = 8.dp.toPx()
+                val amber = Color(0xFFFFB020)
+                for (i in 0 until n) {
+                    val sx = i * (segW + gap)
+                    val lit = (sx + segW / 2f) <= x
+                    if (lit) drawRoundRect(amber.copy(alpha = 0.25f), Offset(sx - 1f, y - h / 2f - 2f), Size(segW + 2f, h + 4f), androidx.compose.ui.geometry.CornerRadius(2f))
+                    drawRoundRect(if (lit) amber else Color(0xFF2A1F0A), Offset(sx, y - h / 2f), Size(segW, h), androidx.compose.ui.geometry.CornerRadius(1.5f))
+                }
+            }
+        }
     }
 }
 

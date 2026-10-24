@@ -78,8 +78,16 @@ fun AnimatedArtwork(
     val spin by infinite.animateFloat(0f, 360f, infiniteRepeatable(tween(1800 * 1, easing = LinearEasing)), label = "spin")
     val slow by infinite.animateFloat(0f, 1f, infiniteRepeatable(tween(1600), RepeatMode.Reverse), label = "slow")
 
+    val uiStyle = com.cadence.player.ui.theme.LocalUiStyle.current
+    val shape = com.cadence.player.ui.theme.artShape()
+    val accent = MaterialTheme.colorScheme.primary
+    val framed = when (uiStyle) {
+        com.cadence.player.ui.theme.UiStyle.NEON -> modifier.border(1.dp, accent.copy(alpha = 0.4f), shape)
+        com.cadence.player.ui.theme.UiStyle.HIFI -> modifier.background(Color(0xFF0B0B0B), RoundedCornerShape(12.dp)).padding(8.dp)
+        else -> modifier
+    }
     when (style) {
-        ArtStyle.STATIC -> ArtImage(song.art, modifier, RoundedCornerShape(2.dp), iconSize = 96.dp)
+        ArtStyle.STATIC -> ArtImage(song.art, framed, shape, iconSize = 96.dp)
         ArtStyle.BREATHE -> {
             val pulse = if (!playing) {
                 0f
@@ -92,16 +100,16 @@ fun AnimatedArtwork(
             }
             ArtImage(
                 song.art,
-                modifier.graphicsLayer {
+                framed.graphicsLayer {
                     val s = 1f + pulse * 0.025f
                     scaleX = s
                     scaleY = s
                 },
-                RoundedCornerShape(2.dp),
+                shape,
                 iconSize = 96.dp,
             )
         }
-        ArtStyle.DRIFT -> Box(modifier.clip(RoundedCornerShape(2.dp))) {
+        ArtStyle.DRIFT -> Box(framed.clip(shape)) {
             ArtImage(
                 song.art,
                 Modifier
@@ -174,6 +182,10 @@ fun SpectrumBlock(scale: Float, modifier: Modifier = Modifier) {
 
 @Composable
 fun TitleBlock(song: Song, scale: Float, onArtist: () -> Unit, onAlbum: () -> Unit) {
+    if (com.cadence.player.ui.theme.LocalUiStyle.current == com.cadence.player.ui.theme.UiStyle.HIFI) {
+        LcdTitle(song, scale, onArtist)
+        return
+    }
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             song.title,
@@ -255,3 +267,31 @@ fun ModesBlock(current: ListeningMode?, onPick: (ListeningMode) -> Unit) {
     }
 }
 
+
+/** Hi-Fi style: the title on an amber LCD display. */
+@Composable
+private fun LcdTitle(song: Song, scale: Float, onArtist: () -> Unit) {
+    val amber = Color(0xFFFFB020)
+    val glow = androidx.compose.ui.text.TextStyle(
+        shadow = androidx.compose.ui.graphics.Shadow(amber.copy(alpha = 0.6f), Offset.Zero, 12f),
+        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+    )
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF0A0806))
+            .border(1.dp, Color(0xFF000000), RoundedCornerShape(8.dp))
+            .clickable(onClick = onArtist)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Text(
+            song.title.uppercase(), color = amber, style = glow, fontSize = (15 * scale).sp, fontWeight = FontWeight.Bold,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            "${song.artist} · ${song.album}".uppercase(), color = amber.copy(alpha = 0.8f), style = glow, fontSize = (12 * scale).sp,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
+    }
+}

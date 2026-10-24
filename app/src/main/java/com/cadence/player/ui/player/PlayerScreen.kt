@@ -449,29 +449,10 @@ private fun showVolume(context: Context) {
 /** Large hairline circle with a thin play/pause glyph. */
 @Composable
 private fun PlayCircle(playing: Boolean, buffering: Boolean, size: Dp = 80.dp, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .size(size)
-            .clip(CircleShape)
-            .border(1.5.dp, CadenceColors.TextPrimary, CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Crossfade(playing, label = "play") { p ->
-            Icon(
-                if (p) LineIcons.Pause else LineIcons.Play,
-                contentDescription = if (p) "Pause" else "Play",
-                tint = CadenceColors.TextPrimary,
-                modifier = Modifier.size(size * 0.375f),
-            )
-        }
-        if (buffering) {
-            CircularProgressIndicator(Modifier.size(size), color = CadenceColors.TextPrimary, strokeWidth = 1.dp)
-        }
-    }
+    com.cadence.player.ui.theme.StyledPlayButton(playing, buffering, size, onClick)
 }
 
-/** Icon-only button of the Minimal theme: grey when idle, white with a short underline when active. */
+/** Icon button drawn in the chosen style (Minimal, Neon, Solid, Glass or Hi-Fi). */
 @Composable
 private fun LineButton(
     icon: ImageVector,
@@ -482,26 +463,7 @@ private fun LineButton(
     tint: Color? = null,
     onClick: () -> Unit,
 ) {
-    val color by animateColorAsState(tint ?: if (active) CadenceColors.TextPrimary else Dim, label = "lineBtn")
-    Column(
-        Modifier
-            .size(size)
-            .clip(CircleShape)
-            .clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Icon(icon, contentDescription = description, tint = color, modifier = Modifier.size(iconSize))
-        if (tint == null) {
-            Spacer(Modifier.height(4.dp))
-            Box(
-                Modifier
-                    .width(12.dp)
-                    .height(1.5.dp)
-                    .background(if (active) CadenceColors.TextPrimary else Color.Transparent)
-            )
-        }
-    }
+    com.cadence.player.ui.theme.StyledIconButton(icon, description, active, size, iconSize, emphasis = tint != null, onClick = onClick)
 }
 
 @Composable

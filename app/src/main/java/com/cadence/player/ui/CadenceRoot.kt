@@ -40,6 +40,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.GraphicEq
@@ -100,6 +102,8 @@ import com.cadence.player.ui.screens.PlaylistsScreen
 import com.cadence.player.ui.screens.RadioScreen
 import com.cadence.player.ui.theme.LineIcons
 import com.cadence.player.ui.dj.DjScreen
+import com.cadence.player.ui.theme.circleGlow
+import com.cadence.player.ui.theme.hifiKey
 import com.cadence.player.ui.custom.AccentSource
 import com.cadence.player.ui.custom.Backdrop
 import com.cadence.player.ui.custom.HomeDashboard
@@ -138,21 +142,24 @@ fun CadenceRoot(vm: MusicViewModel, openPlayerRequest: MutableStateFlow<Boolean>
         AccentSource.ARTWORK -> artAccent?.let { androidx.compose.ui.graphics.lerp(it, Color.White, 0.25f) } ?: Color(theme.accent)
         AccentSource.WALLPAPER -> wallpaperAccent ?: Color(theme.accent)
     }
-    LaunchedEffect(theme.backdrop) { CadenceColors.applyBackdrop(theme.backdrop == Backdrop.AMOLED) }
+    LaunchedEffect(theme.backdrop, theme.style) { CadenceColors.applyStyle(theme.style, theme.backdrop == Backdrop.AMOLED) }
     val accent by animateColorAsState(targetAccent, tween(600), label = "accent")
+    androidx.compose.runtime.CompositionLocalProvider(com.cadence.player.ui.theme.LocalUiStyle provides theme.style) {
     CadenceTheme(accent = accent) {
         val context = LocalContext.current
         var hasPermission by remember { mutableStateOf(hasAudioPermission(context)) }
         LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { hasPermission = hasAudioPermission(context) }
         LaunchedEffect(hasPermission) { if (hasPermission) vm.onPermissionGranted() }
 
-        Box(Modifier.fillMaxSize().background(CadenceColors.Background)) {
+        val styleBrush = com.cadence.player.ui.theme.styleBackground(theme.style)
+        Box(Modifier.fillMaxSize().background(CadenceColors.Background).then(if (styleBrush != null) Modifier.background(styleBrush) else Modifier)) {
             if (hasPermission) {
                 MainScaffold(vm, openPlayerRequest)
             } else {
                 PermissionScreen(onGranted = { hasPermission = true })
             }
         }
+    }
     }
 }
 
@@ -438,27 +445,42 @@ private enum class MoreItem(val label: String, val icon: ImageVector) {
 @Composable
 private fun BottomTabs(tabs: List<Tab>, selected: Tab, onSelect: (Tab) -> Unit, onMore: (MoreItem) -> Unit) {
     var moreOpen by remember { mutableStateOf(false) }
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(CadenceColors.Background)
-    ) {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF1F1F1F)))
+    val uiStyle = com.cadence.player.ui.theme.LocalUiStyle.current
+    val accent = MaterialTheme.colorScheme.primary
+    val onAccent = MaterialTheme.colorScheme.onPrimary
+    val glass = uiStyle == com.cadence.player.ui.theme.UiStyle.GLASS
+    val container = when (uiStyle) {
+        com.cadence.player.ui.theme.UiStyle.SOLID -> Modifier.background(Color(0xFF111111))
+        com.cadence.player.ui.theme.UiStyle.HIFI -> Modifier.background(Color(0xFF0E0E0E))
+        com.cadence.player.ui.theme.UiStyle.GLASS -> Modifier
+        else -> Modifier.background(CadenceColors.Background)
+    }
+    Column(Modifier.fillMaxWidth().then(container).then(if (glass) Modifier.navigationBarsPadding() else Modifier)) {
+        if (!glass && uiStyle != com.cadence.player.ui.theme.UiStyle.SOLID) {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(if (uiStyle == com.cadence.player.ui.theme.UiStyle.HIFI) Color(0xFF262626) else Color(0xFF1F1F1F)))
+        }
         Row(
             Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
-                .height(60.dp)
+                .then(
+                    if (glass) {
+                        Modifier
+                            .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
+                            .clip(RoundedCornerShape(31.dp))
+                            .background(Color(0xFF2A1838).copy(alpha = 0.92f))
+                            .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(31.dp))
+                    } else {
+                        Modifier.navigationBarsPadding()
+                    }
+                )
+                .height(if (glass) 60.dp else 62.dp)
                 .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(if (uiStyle == com.cadence.player.ui.theme.UiStyle.HIFI) 4.dp else 0.dp),
         ) {
             tabs.forEach { tab ->
                 val isSelected = tab == selected
-                val tint by animateColorAsState(
-                    if (isSelected) CadenceColors.TextPrimary else Color(0xFF6E6E6E),
-                    label = "tabTint",
-                )
-                Column(
+                Box(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
@@ -466,17 +488,9 @@ private fun BottomTabs(tabs: List<Tab>, selected: Tab, onSelect: (Tab) -> Unit, 
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                         ) { onSelect(tab) },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Icon(tab.icon, contentDescription = tab.label, tint = tint, modifier = Modifier.size(23.dp))
-                    Spacer(Modifier.height(6.dp))
-                    Box(
-                        Modifier
-                            .width(14.dp)
-                            .height(1.5.dp)
-                            .background(if (isSelected) CadenceColors.TextPrimary else Color.Transparent)
-                    )
+                    TabGlyph(tab, isSelected, uiStyle, accent, onAccent)
                 }
             }
             Box(
@@ -489,7 +503,7 @@ private fun BottomTabs(tabs: List<Tab>, selected: Tab, onSelect: (Tab) -> Unit, 
                     ) { moreOpen = true },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(LineIcons.MoreVertical, contentDescription = "More", tint = Color(0xFF6E6E6E), modifier = Modifier.size(23.dp).padding(bottom = 0.dp))
+                Icon(LineIcons.MoreVertical, contentDescription = "More", tint = Color(0xFF8A8A8A), modifier = Modifier.size(23.dp))
                 DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
                     MoreItem.entries.forEach { item ->
                         DropdownMenuItem(
@@ -503,6 +517,51 @@ private fun BottomTabs(tabs: List<Tab>, selected: Tab, onSelect: (Tab) -> Unit, 
                     }
                 }
             }
+        }
+    }
+}
+
+/** One tab icon in the current style. */
+@Composable
+private fun TabGlyph(tab: Tab, selected: Boolean, uiStyle: com.cadence.player.ui.theme.UiStyle, accent: Color, onAccent: Color) {
+    val idle = Color(0xFF6E6E6E)
+    when (uiStyle) {
+        com.cadence.player.ui.theme.UiStyle.MINIMAL -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            val tint by animateColorAsState(if (selected) CadenceColors.TextPrimary else idle, label = "tabTint")
+            Icon(tab.icon, contentDescription = tab.label, tint = tint, modifier = Modifier.size(23.dp))
+            Spacer(Modifier.height(6.dp))
+            Box(Modifier.width(14.dp).height(1.5.dp).background(if (selected) CadenceColors.TextPrimary else Color.Transparent))
+        }
+        com.cadence.player.ui.theme.UiStyle.NEON -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(tab.icon, contentDescription = tab.label, tint = if (selected) accent else idle, modifier = Modifier.size(23.dp))
+            Spacer(Modifier.height(5.dp))
+            Box(
+                Modifier.size(4.dp)
+                    .then(if (selected) Modifier.circleGlow(accent, 3f, 0.7f) else Modifier)
+                    .clip(CircleShape).background(if (selected) accent else Color.Transparent),
+            )
+        }
+        com.cadence.player.ui.theme.UiStyle.SOLID -> Box(
+            Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(if (selected) accent else Color.Transparent),
+            contentAlignment = Alignment.Center,
+        ) { Icon(tab.icon, contentDescription = tab.label, tint = if (selected) onAccent else Color(0xFF9A9A9A), modifier = Modifier.size(22.dp)) }
+        com.cadence.player.ui.theme.UiStyle.GLASS -> Box(
+            Modifier.size(38.dp).clip(CircleShape).background(if (selected) Color.White.copy(alpha = 0.22f) else Color.Transparent),
+            contentAlignment = Alignment.Center,
+        ) { Icon(tab.icon, contentDescription = tab.label, tint = if (selected) Color.White else Color.White.copy(alpha = 0.6f), modifier = Modifier.size(21.dp)) }
+        com.cadence.player.ui.theme.UiStyle.HIFI -> Column(
+            Modifier.fillMaxWidth().height(50.dp).hifiKey(pressedIn = selected, radius = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            val amber = Color(0xFFFFB020)
+            Box(
+                Modifier.width(10.dp).height(3.dp)
+                    .then(if (selected) Modifier.circleGlow(amber, 3f, 0.6f) else Modifier)
+                    .clip(RoundedCornerShape(2.dp)).background(if (selected) amber else Color(0xFF3A3A3A)),
+            )
+            Spacer(Modifier.height(4.dp))
+            Icon(tab.icon, contentDescription = tab.label, tint = if (selected) Color(0xFFEDEDED) else Color(0xFF8A8A8A), modifier = Modifier.size(20.dp))
         }
     }
 }

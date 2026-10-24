@@ -123,6 +123,25 @@ fun ThemeGalleryScreen(vm: MusicViewModel, onBack: () -> Unit) {
         ) {
             // ---------- Theme ----------
             Section("Theme")
+            Label("Button style")
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                com.cadence.player.ui.theme.UiStyle.entries.forEach { st ->
+                    StyleCard(st, selected = theme.style == st) {
+                        UiStore.setTheme(
+                            theme.copy(
+                                style = st,
+                                name = st.label,
+                                accent = st.defaultAccent,
+                                accentSource = AccentSource.FIXED,
+                            )
+                        )
+                    }
+                }
+            }
+            Hint(theme.style.description)
             Label("Background")
             PillRow {
                 Backdrop.entries.forEach { b ->
@@ -481,4 +500,42 @@ private fun ImportDialog(onDismiss: () -> Unit, onImport: (String) -> Unit) {
             TextButton(onClick = onDismiss) { Text("Cancel", color = CadenceColors.TextSecondary) }
         },
     )
+}
+
+/** A live preview of one style: its play button and two side buttons, drawn with that style. */
+@Composable
+private fun StyleCard(style: com.cadence.player.ui.theme.UiStyle, selected: Boolean, onClick: () -> Unit) {
+    val bg = when (style) {
+        com.cadence.player.ui.theme.UiStyle.GLASS -> androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color(0xFF7A3A8F), Color(0xFF3A1B52), Color(0xFF0D0712)))
+        com.cadence.player.ui.theme.UiStyle.HIFI -> androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF1B1B1B), Color(0xFF121212)))
+        else -> androidx.compose.ui.graphics.SolidColor(Color.Black)
+    }
+    val accent = Color(style.defaultAccent)
+    Column(
+        Modifier
+            .width(132.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(bg)
+            .border(if (selected) 2.dp else 1.dp, if (selected) Color.White else CadenceColors.Outline, RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        androidx.compose.runtime.CompositionLocalProvider(com.cadence.player.ui.theme.LocalUiStyle provides style) {
+            androidx.compose.material3.MaterialTheme(
+                colorScheme = androidx.compose.material3.MaterialTheme.colorScheme.copy(
+                    primary = accent,
+                    onPrimary = Color.Black,
+                ),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    com.cadence.player.ui.theme.StyledIconButton(LineIcons.Previous, "Previous", false, 32.dp, 16.dp, emphasis = true) { onClick() }
+                    com.cadence.player.ui.theme.StyledPlayButton(playing = false, buffering = false, size = 48.dp) { onClick() }
+                    com.cadence.player.ui.theme.StyledIconButton(LineIcons.Next, "Next", false, 32.dp, 16.dp, emphasis = true) { onClick() }
+                }
+            }
+        }
+        Text(style.label, color = Color.White, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+    }
 }

@@ -110,6 +110,8 @@ data class ThemeConfig(
     /** ARGB used when [accentSource] is FIXED. */
     val accent: Long = 0xFFFFFFFF,
     val author: String = "Cadence",
+    /** Button and control style (Minimal, Neon, Solid, Glass, Hi-Fi). */
+    val style: com.cadence.player.ui.theme.UiStyle = com.cadence.player.ui.theme.UiStyle.MINIMAL,
 )
 
 /** Home dashboard widgets. */
@@ -413,6 +415,7 @@ object UiStore {
         .put("backdrop", t.backdrop.name)
         .put("accentSource", t.accentSource.name)
         .put("accent", String.format("#%08X", t.accent))
+        .put("style", t.style.name)
 
     fun parseTheme(o: JSONObject): ThemeConfig {
         val d = ThemeConfig()
@@ -425,6 +428,7 @@ object UiStore {
             backdrop = enumOr(o.optString("backdrop"), d.backdrop),
             accentSource = enumOr(o.optString("accentSource"), d.accentSource),
             accent = accent,
+            style = enumOr(o.optString("style"), d.style),
         )
     }
 

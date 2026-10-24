@@ -89,6 +89,7 @@ One tap changes the queue, the screen layout and how playback behaves. Tap the m
 - **Ready-made layouts:** Standard, Headphones, Home listening and Driving.
 - **Tab bar:** choose which tabs show and their order.
 - **Gestures:** assign swipes, double-tap and long-press on the player.
+- **Button styles:** Minimal, Neon, Solid, Glass and Hi-Fi. Each restyles the play button, controls, seek bar, tab bar and artwork; Hi-Fi adds hardware keys, amber LEDs and an LCD title.
 - **Themes:**
   - **AMOLED black** or dark grey background.
   - **Dynamic accent colour:** a fixed colour, from the album art, or from your wallpaper (Android 12+).

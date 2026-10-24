@@ -45,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import com.cadence.player.ui.theme.hifiKey
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -322,12 +323,38 @@ fun MinimalButton(
     modifier: Modifier = Modifier,
     primary: Boolean = false,
 ) {
-    val color = if (primary) CadenceColors.TextPrimary else CadenceColors.TextSecondary
+    val uiStyle = com.cadence.player.ui.theme.LocalUiStyle.current
+    val accent = MaterialTheme.colorScheme.primary
+    val onAccent = MaterialTheme.colorScheme.onPrimary
+    val color = when (uiStyle) {
+        com.cadence.player.ui.theme.UiStyle.MINIMAL -> if (primary) CadenceColors.TextPrimary else CadenceColors.TextSecondary
+        com.cadence.player.ui.theme.UiStyle.NEON -> if (primary) accent else CadenceColors.TextPrimary
+        com.cadence.player.ui.theme.UiStyle.SOLID -> if (primary) onAccent else CadenceColors.TextPrimary
+        com.cadence.player.ui.theme.UiStyle.GLASS -> Color.White
+        com.cadence.player.ui.theme.UiStyle.HIFI -> if (primary) Color(0xFFFFB020) else Color(0xFFBDBDBD)
+    }
+    val styled = when (uiStyle) {
+        com.cadence.player.ui.theme.UiStyle.MINIMAL -> Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .border(1.dp, if (primary) CadenceColors.TextPrimary else CadenceColors.Outline, RoundedCornerShape(4.dp))
+        com.cadence.player.ui.theme.UiStyle.NEON -> Modifier
+            .clip(RoundedCornerShape(23.dp))
+            .border(1.dp, if (primary) accent else Color(0xFF2A2A2A), RoundedCornerShape(23.dp))
+        com.cadence.player.ui.theme.UiStyle.SOLID -> Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (primary) accent else Color(0xFF1C1C1C))
+        com.cadence.player.ui.theme.UiStyle.GLASS -> Modifier
+            .clip(RoundedCornerShape(23.dp))
+            .background(Color.White.copy(alpha = if (primary) 0.24f else 0.10f))
+            .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(23.dp))
+        com.cadence.player.ui.theme.UiStyle.HIFI -> Modifier
+            .hifiKey(radius = 6.dp)
+            .clip(RoundedCornerShape(6.dp))
+    }
     Row(
         modifier
             .height(46.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .border(1.dp, if (primary) CadenceColors.TextPrimary else CadenceColors.Outline, RoundedCornerShape(4.dp))
+            .then(styled)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.Center,

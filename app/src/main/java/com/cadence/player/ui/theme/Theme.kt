@@ -30,6 +30,26 @@ object CadenceColors {
     val TextSecondary = Color(0xFFB3B3B3)
     val TextTertiary = Color(0xFF808080)
 
+    fun applyStyle(style: UiStyle, amoled: Boolean) {
+        when (style) {
+            UiStyle.GLASS -> {
+                Background = Color(0xFF140A1C); Surface = Color(0xFF24152F); SurfaceHigh = Color(0xFF2E1C3B)
+                SurfaceHighest = Color(0xFF3A2549); Outline = Color(0xFF4A3460); BarBackground = Color(0xFF1F1229)
+            }
+            UiStyle.HIFI -> {
+                Background = Color(0xFF141414); Surface = Color(0xFF1B1B1B); SurfaceHigh = Color(0xFF232323)
+                SurfaceHighest = Color(0xFF2E2E2E); Outline = Color(0xFF303030); BarBackground = Color(0xFF0E0E0E)
+            }
+            UiStyle.SOLID -> if (amoled) {
+                Background = Color(0xFF000000); Surface = Color(0xFF141414); SurfaceHigh = Color(0xFF1C1C1C)
+                SurfaceHighest = Color(0xFF262626); Outline = Color(0xFF2E2E2E); BarBackground = Color(0xFF111111)
+            } else {
+                applyBackdrop(false)
+            }
+            else -> applyBackdrop(amoled)
+        }
+    }
+
     fun applyBackdrop(amoled: Boolean) {
         if (amoled) {
             Background = Color(0xFF000000); Surface = Color(0xFF0F0F0F); SurfaceHigh = Color(0xFF1A1A1A)

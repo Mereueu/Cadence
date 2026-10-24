@@ -14,6 +14,7 @@ Cadence loads the themes in `index.json` into **More → Themes & layout → Com
 |----------------|---------------------------------------------|
 | `name`         | Theme name                                  |
 | `author`       | Your name or handle                         |
+| `style`        | `MINIMAL`, `NEON`, `SOLID`, `GLASS` or `HIFI` (button style) |
 | `backdrop`     | `AMOLED` (true black) or `DARK` (dark grey) |
 | `accentSource` | `FIXED`, `ARTWORK` (album art) or `WALLPAPER` (Android 12+) |
 | `accent`       | `#AARRGGBB` colour, used when `accentSource` is `FIXED` |
