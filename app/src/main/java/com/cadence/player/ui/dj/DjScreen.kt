@@ -157,6 +157,13 @@ fun DjScreen(vm: MusicViewModel, onBack: () -> Unit) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(Hair))
 
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
+            MinimalButton(
+                "Open DJ decks: jogs, pads, EQ, crossfader",
+                null,
+                { actions.openDecks() },
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                primary = true,
+            )
             DeckCard("NOW", current, a, smoothA, dj, isDeckA = true, working = working)
             MixInfo(dj, a, b)
             DeckCard("NEXT", nextSong, b, smoothB, dj, isDeckA = false, working = working)

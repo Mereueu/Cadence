@@ -70,6 +70,15 @@ object ManualDj {
         val echo: Boolean = false,
         val synced: Boolean = false,
         val level: Float = 0f,
+        /** Key shift in semitones (tempo unchanged). */
+        val keyShift: Int = 0,
+        /** Slip: loops, rolls and held hot cues return to where the track would have been. */
+        val slip: Boolean = false,
+        /** 0 full mix, 1 instrumental, 2 vocals (approximate). */
+        val stem: Int = 0,
+        /** True while the hot cues shown were placed automatically from the phrase analysis. */
+        val autoCues: Boolean = false,
+        val rolling: Boolean = false,
     )
 
     data class State(
@@ -81,6 +90,8 @@ object ManualDj {
         val pitchRange: Int = 8,
         val echoBeats: Float = 0.5f,
         val note: String? = null,
+        val quantize: Boolean = true,
+        val smartFader: Boolean = false,
     ) {
         fun deck(side: Side) = if (side == Side.A) a else b
     }
@@ -99,6 +110,12 @@ object ManualDj {
     private var range = 8
     private var echoBeats = 0.5f
     private var note: String? = null
+    private var quantize = true
+    private var smart = false
+    private var publishTick = 0
+    // Slip: where the track "really" is while a loop, roll or held cue plays something else.
+    private val slipBase = mutableMapOf<Side, Long?>(Side.A to null, Side.B to null)
+    private val slipStart = mutableMapOf(Side.A to 0L, Side.B to 0L)
     private val bend = mutableMapOf(Side.A to 0f, Side.B to 0f)
     private val bendUntil = mutableMapOf(Side.A to 0L, Side.B to 0L)
 
@@ -121,7 +138,7 @@ object ManualDj {
         loop = scope.launch {
             while (isActive) {
                 runCatching { tick() }
-                publish(true)
+                if (++publishTick % 2 == 0) publish(true)
                 delay(16L)
             }
         }
@@ -185,7 +202,9 @@ object ManualDj {
         decks[side] = decks[side]!!.copy(
             songId = song.id, title = song.title, artist = song.artist, durationMs = song.duration,
             positionMs = start, cueMs = start, hotCues = cues, playing = false, synced = false, pitch = 0f,
+            keyShift = 0, autoCues = false, rolling = false,
         )
+        slipBase[side] = null
         p.playbackParameters = PlaybackParameters(1f)
         if (start > 0) p.seekTo(start)
         note = "Loaded “${song.title}” on deck ${side.name}"
@@ -306,12 +325,127 @@ object ManualDj {
         if (existing == null) {
             val at = snapBeat(side, p.currentPosition)
             val cues = d.hotCues.toMutableList().also { it[index] = at }
-            decks[side] = d.copy(hotCues = cues)
+            decks[side] = d.copy(hotCues = cues, autoCues = false)
             d.songId?.let { saveCues(it, cues) }
         } else {
-            p.seekTo(existing)
+            if (d.slip && p.isPlaying) beginSlip(side, p)
+            p.seekTo(quantized(side, p, existing))
             if (!p.isPlaying) p.play()
         }
+    }
+
+    /** Releasing a hot cue in slip mode returns to where the track would have been. */
+    fun hotCueRelease(side: Side) {
+        if (decks[side]?.slip == true && decks[side]?.loopStartMs == null) endSlip(side)
+    }
+
+    /** With quantize on, jumps keep the current position within the beat so the groove never stumbles. */
+    private fun quantized(side: Side, p: ExoPlayer, target: Long): Long {
+        val a = analysis(side) ?: return target
+        if (!quantize || !p.isPlaying) return target
+        val phase = frac(a.beatAt(p.currentPosition))
+        val tPhase = frac(a.beatAt(target))
+        var diff = phase - tPhase
+        if (diff > 0.5) diff -= 1.0
+        if (diff < -0.5) diff += 1.0
+        return (target + diff * a.beatMs).roundToLong().coerceAtLeast(0L)
+    }
+
+    private fun beginSlip(side: Side, p: ExoPlayer) {
+        if (slipBase[side] != null) return
+        slipBase[side] = p.currentPosition
+        slipStart[side] = SystemClock.elapsedRealtime()
+    }
+
+    private fun endSlip(side: Side) {
+        val base = slipBase[side] ?: return
+        val p = player(side) ?: return
+        val elapsed = SystemClock.elapsedRealtime() - slipStart[side]!!
+        slipBase[side] = null
+        p.seekTo(base + (elapsed * p.playbackParameters.speed).toLong())
+    }
+
+    // ------------------------------------------------------------------ modern performance features
+
+    /** Beat jump: moves the playhead by [beats] beats (negative = back), keeping the beat phase. */
+    fun beatJump(side: Side, beats: Int) {
+        val p = player(side) ?: return
+        val beatMs = analysis(side)?.beatMs ?: 500.0
+        seek(side, p.currentPosition + (beats * beatMs).roundToLong())
+        // Keep an active loop travelling with the jump.
+        val d = decks[side]!!
+        if (d.loopStartMs != null && d.loopEndMs != null) {
+            val shift = (beats * beatMs).roundToLong()
+            decks[side] = d.copy(loopStartMs = d.loopStartMs + shift, loopEndMs = d.loopEndMs + shift)
+        }
+    }
+
+    /** Loop roll: a short momentary loop; when released the track carries on as if it never stopped. */
+    fun rollStart(side: Side, beats: Float) {
+        val p = player(side) ?: return
+        if (!p.isPlaying) return
+        beginSlip(side, p)
+        val beatMs = analysis(side)?.beatMs ?: 500.0
+        val start = snapBeat(side, p.currentPosition, floor = true)
+        decks[side] = decks[side]!!.copy(loopStartMs = start, loopEndMs = start + (beats * beatMs).roundToLong(), loopBeats = beats, rolling = true)
+    }
+
+    fun rollEnd(side: Side) {
+        if (decks[side]?.rolling != true) return
+        decks[side] = decks[side]!!.copy(loopStartMs = null, loopEndMs = null, loopBeats = 0f, rolling = false)
+        endSlip(side)
+    }
+
+    fun shiftKey(side: Side, delta: Int) {
+        val d = decks[side]!!
+        decks[side] = d.copy(keyShift = (d.keyShift + delta).coerceIn(-6, 6))
+    }
+
+    fun resetKey(side: Side) {
+        decks[side] = decks[side]!!.copy(keyShift = 0)
+    }
+
+    /** Key sync: shifts this deck by the fewest semitones that make it harmonically compatible with the other. */
+    fun keySync(side: Side) {
+        val other = if (side == Side.A) Side.B else Side.A
+        val me = analysis(side); val them = analysis(other)
+        if (me == null || them == null) {
+            note = "Key sync needs both songs analysed"
+            return
+        }
+        val theirKey = shiftedKey(them.keyIndex, decks[other]!!.keyShift)
+        val best = (-3..3).maxByOrNull { n ->
+            com.cadence.player.audio.Camelot.compatibility(shiftedKey(me.keyIndex, n), theirKey) * 10f - abs(n) * 0.3f
+        } ?: 0
+        decks[side] = decks[side]!!.copy(keyShift = best)
+        note = if (best == 0) "Keys already match" else "Key shifted ${if (best > 0) "+" else ""}$best"
+    }
+
+    /** Key index after shifting by [n] semitones (keeps major/minor). */
+    fun shiftedKey(keyIndex: Int, n: Int): Int {
+        val minor = keyIndex >= 12
+        val root = ((keyIndex % 12) + n % 12 + 12) % 12
+        return if (minor) root + 12 else root
+    }
+
+    fun toggleSlip(side: Side) {
+        val d = decks[side]!!
+        if (d.slip) endSlip(side)
+        decks[side] = d.copy(slip = !d.slip)
+    }
+
+    fun toggleQuantize() {
+        quantize = !quantize
+    }
+
+    /** Smart fader: moving the crossfader also swaps the bass and filters the outgoing deck. */
+    fun toggleSmartFader() {
+        smart = !smart
+    }
+
+    fun setStem(side: Side, mode: Int) {
+        val d = decks[side]!!
+        decks[side] = d.copy(stem = if (d.stem == mode) 0 else mode)
     }
 
     fun clearHotCue(side: Side, index: Int) {
@@ -329,14 +463,17 @@ object ManualDj {
         val beatMs = a?.beatMs ?: 500.0
         val start = d.loopStartMs ?: snapBeat(side, p.currentPosition, floor = true)
         val end = start + (beats * beatMs).roundToLong()
-        decks[side] = d.copy(loopStartMs = start, loopEndMs = end, loopBeats = beats)
+        if (d.slip && p.isPlaying) beginSlip(side, p)
+        decks[side] = d.copy(loopStartMs = start, loopEndMs = end, loopBeats = beats, rolling = false)
     }
 
     fun halveLoop(side: Side) = decks[side]?.loopBeats?.takeIf { it > 0f }?.let { loop(side, (it / 2f).coerceAtLeast(0.125f)) }
     fun doubleLoop(side: Side) = decks[side]?.loopBeats?.takeIf { it > 0f }?.let { loop(side, (it * 2f).coerceAtMost(32f)) }
 
     fun clearLoop(side: Side) {
-        decks[side] = decks[side]!!.copy(loopStartMs = null, loopEndMs = null, loopBeats = 0f)
+        val had = decks[side]!!.loopStartMs != null
+        decks[side] = decks[side]!!.copy(loopStartMs = null, loopEndMs = null, loopBeats = 0f, rolling = false)
+        if (had && decks[side]!!.slip) endSlip(side)
     }
 
     // ------------------------------------------------------------------ mixer
@@ -384,17 +521,27 @@ object ManualDj {
         for (side in Side.entries) {
             val p = player(side) ?: continue
             var d = decks[side] ?: continue
+            if (d.songId != null && d.hotCues.size < 4) d = d.copy(hotCues = listOf(null, null, null, null))
 
             // Deck A can change song underneath us (end of track, notification skip).
             if (side == Side.A) {
                 val id = p.currentMediaItem?.mediaId?.toLongOrNull()
-                if (id != d.songId) d = Deck(volume = d.volume, eqHigh = d.eqHigh, eqMid = d.eqMid, eqLow = d.eqLow, filter = d.filter).withSong(id, p)
+                if (id != d.songId) d = Deck(volume = d.volume, eqHigh = d.eqHigh, eqMid = d.eqMid, eqLow = d.eqLow, filter = d.filter, slip = d.slip).withSong(id, p)
             }
 
             // Tempo: pitch fader plus any jog bend.
             if (now > bendUntil[side]!!) bend[side] = 0f
             val speed = (1f + d.pitch * range / 100f) * (1f + bend[side]!!)
-            if (abs(p.playbackParameters.speed - speed) > 0.0004f) p.playbackParameters = PlaybackParameters(speed)
+            val pitch = 2.0.pow(d.keyShift / 12.0).toFloat()
+            if (abs(p.playbackParameters.speed - speed) > 0.0004f || abs(p.playbackParameters.pitch - pitch) > 0.0004f) {
+                p.playbackParameters = PlaybackParameters(speed, pitch)
+            }
+
+            // Automatic hot cues from the phrase analysis (intro end, drop, breakdown, outro) when none are saved.
+            val an = analysis(side)
+            if (an != null && d.songId != null && d.hotCues.all { it == null } && !d.autoCues) {
+                d = d.copy(hotCues = autoCues(an), autoCues = true)
+            }
 
             // Loop.
             val ls = d.loopStartMs; val le = d.loopEndMs
@@ -417,9 +564,19 @@ object ManualDj {
             fx.echoFeedback = 0.5f
             fx.echoWet = if (d.echo) 0.6f else 0f
             fx.gain = Normalizer.gainFor(d.songId)
+            fx.stemMode = d.stem
 
             // Channel fader × crossfader curve.
             val xf = if (side == Side.A) curve(1f - crossfader) else curve(crossfader)
+            if (smart) {
+                // How far this deck is being faded out (0 = fully in, 1 = gone).
+                val out = ((if (side == Side.A) crossfader else 1f - crossfader) - 0.5f).coerceAtLeast(0f) * 2f
+                if (out > 0f) {
+                    fx.eqLowDb = minOf(fx.eqLowDb, -40f * minOf(1f, out * 1.6f))
+                    val hp = (20.0 * 10.0.pow(out * 2.2)).toFloat()
+                    if (hp > fx.highPassHz) fx.highPassHz = hp
+                }
+            }
             val vol = (d.volume * d.volume) * xf
             p.volume = vol
             if (side == Side.A) LiveAudio.deckA.gain = vol else LiveAudio.deckB.gain = vol
@@ -454,10 +611,22 @@ object ManualDj {
 
     private fun frac(v: Double): Double = v - Math.floor(v)
 
+    private fun autoCues(a: TrackAnalysis): List<Long?> {
+        val picks = mutableListOf<Long>()
+        picks += a.firstDownbeatMs
+        if (a.introEndMs > 0) picks += a.introEndMs
+        a.sections.firstOrNull { it.type == com.cadence.player.audio.SectionType.DROP }?.let { picks += it.startMs }
+        a.sections.firstOrNull { it.type == com.cadence.player.audio.SectionType.BREAKDOWN }?.let { picks += it.startMs }
+        if (a.outroStartMs < a.durationMs) picks += a.outroStartMs
+        val unique = picks.distinct().sorted().take(4)
+        return List(4) { unique.getOrNull(it) }
+    }
+
     private fun publish(active: Boolean) {
         _state.value = State(
             active = active, a = decks[Side.A]!!, b = decks[Side.B]!!, crossfader = crossfader,
             sharpCurve = sharp, pitchRange = range, echoBeats = echoBeats, note = note,
+            quantize = quantize, smartFader = smart,
         )
     }
 

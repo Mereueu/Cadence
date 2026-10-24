@@ -39,6 +39,12 @@ class DjFxProcessor : BaseAudioProcessor() {
     @Volatile var eqLowDb = 0f
     @Volatile var eqMidDb = 0f
     @Volatile var eqHighDb = 0f
+    /**
+     * Quick stem isolation without AI separation, using stereo placement and frequency:
+     * 0 = full mix, 1 = instrumental (centre-panned vocals reduced, bass kept),
+     * 2 = vocal focus (centre channel, voice band only). Approximate by nature.
+     */
+    @Volatile var stemMode = 0
     /** Channel fader / crossfader level applied inside the chain (1 = unity). */
     @Volatile var level = 1f
 
@@ -52,11 +58,12 @@ class DjFxProcessor : BaseAudioProcessor() {
         eqMidDb = 0f
         eqHighDb = 0f
         level = 1f
+        stemMode = 0
     }
 
     private val isNeutral: Boolean
         get() = highPassHz <= 20f && lowPassHz >= 19000f && bassKill <= 0.001f && echoWet <= 0.001f && dryGain >= 0.999f && gain >= 0.999f &&
-            eqOff(eqLowDb) && eqOff(eqMidDb) && eqOff(eqHighDb) && level >= 0.999f
+            eqOff(eqLowDb) && eqOff(eqMidDb) && eqOff(eqHighDb) && level >= 0.999f && stemMode == 0
 
     private fun eqOff(db: Float) = db > -0.05f && db < 0.05f
 
@@ -87,6 +94,11 @@ class DjFxProcessor : BaseAudioProcessor() {
     private val eqLow = Biquad()
     private val eqMid = Biquad()
     private val eqHigh = Biquad()
+    private val stemBass = Biquad()
+    private val stemHp = Biquad()
+    private val stemLp = Biquad()
+    private var stemRate = 0
+    private val frame = FloatArray(8)
     private var lastLowDb = Float.NaN
     private var lastMidDb = Float.NaN
     private var lastHighDb = Float.NaN
@@ -173,6 +185,24 @@ class DjFxProcessor : BaseAudioProcessor() {
         q.set(1 + alpha * a, -2 * c, 1 - alpha * a, 1 + alpha / a, -2 * c, 1 - alpha / a)
     }
 
+    private fun designStemFilters() {
+        fun lowPass(q: Biquad, freq: Double) {
+            val w0 = 2 * PI * freq / sampleRate
+            val alpha = sin(w0) / (2 * 0.707)
+            val c = cos(w0)
+            q.set((1 - c) / 2, 1 - c, (1 - c) / 2, 1 + alpha, -2 * c, 1 - alpha)
+        }
+        fun highPass(q: Biquad, freq: Double) {
+            val w0 = 2 * PI * freq / sampleRate
+            val alpha = sin(w0) / (2 * 0.707)
+            val c = cos(w0)
+            q.set((1 + c) / 2, -(1 + c), (1 + c) / 2, 1 + alpha, -2 * c, 1 - alpha)
+        }
+        lowPass(stemBass, 160.0)
+        highPass(stemHp, 180.0)
+        lowPass(stemLp, 6000.0)
+    }
+
     override fun queueInput(inputBuffer: ByteBuffer) {
         val remaining = inputBuffer.remaining()
         if (remaining == 0) return
@@ -206,6 +236,11 @@ class DjFxProcessor : BaseAudioProcessor() {
         val input = inputBuffer.order(ByteOrder.nativeOrder())
         out.order(ByteOrder.nativeOrder())
         val frames = remaining / (2 * channels)
+        val stem = if (channels == 2) stemMode else 0
+        if (stem != 0 && stemRate != sampleRate) {
+            designStemFilters()
+            stemRate = sampleRate
+        }
         for (f in 0 until frames) {
             for (c in 0 until channels) {
                 var x = input.short / 32768f
@@ -215,6 +250,25 @@ class DjFxProcessor : BaseAudioProcessor() {
                 if (lowOn) x = eqLow.process(c, x)
                 if (midOn) x = eqMid.process(c, x)
                 if (highOn) x = eqHigh.process(c, x)
+                frame[c] = x
+            }
+            if (stem != 0) {
+                val mid = (frame[0] + frame[1]) * 0.5f
+                val side = (frame[0] - frame[1]) * 0.5f
+                if (stem == 1) {
+                    // Instrumental: drop the centre (where vocals sit) but keep the bass, which is centred too.
+                    val bass = stemBass.process(0, mid)
+                    frame[0] = side * 1.4f + bass
+                    frame[1] = -side * 1.4f + bass
+                } else {
+                    // Vocal focus: centre channel, band-limited to the voice range.
+                    val v = stemLp.process(0, stemHp.process(0, mid - side * 0.5f)) * 1.3f
+                    frame[0] = v
+                    frame[1] = v
+                }
+            }
+            for (c in 0 until channels) {
+                val x = frame[c]
                 var y = x * dry
                 if (echoLen > 0) {
                     var readPos = echoPos - delaySamples
@@ -245,6 +299,7 @@ class DjFxProcessor : BaseAudioProcessor() {
             if (silentBuffers == 121) {
                 echo.fill(0f)
                 hp.clear(); lp.clear(); shelf.clear(); eqLow.clear(); eqMid.clear(); eqHigh.clear()
+                stemBass.clear(); stemHp.clear(); stemLp.clear()
             }
             return true
         }

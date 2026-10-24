@@ -274,6 +274,7 @@ private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow
     var showSleep by remember { mutableStateOf(false) }
     var showSpeed by remember { mutableStateOf(false) }
     var showVisualizer by rememberSaveable { mutableStateOf(false) }
+    var showDecks by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -301,10 +302,11 @@ private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow
             openSleepTimer = { showSleep = true },
             openSpeed = { showSpeed = true },
             openVisualizer = { showVisualizer = true },
+            openDecks = { showDecks = true },
         )
     }
 
-    BackHandler(enabled = navigator.canGoBack && !showVisualizer) { navigator.back() }
+    BackHandler(enabled = navigator.canGoBack && !showVisualizer && !showDecks) { navigator.back() }
 
     androidx.compose.runtime.CompositionLocalProvider(LocalActions provides actions) {
         Box(Modifier.fillMaxSize()) {
@@ -336,6 +338,7 @@ private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow
                         when (item) {
                             MoreItem.SETTINGS -> navigator.push(Route.Settings)
                             MoreItem.DJ -> navigator.push(Route.Dj)
+                            MoreItem.DECKS -> showDecks = true
                             MoreItem.CUSTOMIZE -> {
                                 navigator.selectTab(Tab.PLAYER)
                                 UiStore.setEditing(true)
@@ -374,6 +377,9 @@ private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow
 
         AnimatedVisibility(visible = showVisualizer, enter = fadeIn(tween(400)), exit = fadeOut(tween(300))) {
             VisualizerScreen(vm, onClose = { showVisualizer = false })
+        }
+        if (showDecks) {
+            com.cadence.player.ui.dj.DjDeckScreen(vm, onClose = { showDecks = false })
         }
 
         menuFor?.let { (song, ctx) ->
@@ -416,7 +422,8 @@ private fun RouteContent(route: Route, vm: MusicViewModel, onBack: () -> Unit) {
 }
 
 private enum class MoreItem(val label: String, val icon: ImageVector) {
-    DJ("Auto DJ", LineIcons.Dj),
+    DECKS("DJ decks", LineIcons.Dj),
+    DJ("Auto DJ", LineIcons.Equalizer),
     CUSTOMIZE("Customize player", LineIcons.Edit),
     THEMES("Themes & layout", LineIcons.Palette),
     VISUALIZER("Visualizer", LineIcons.Visualizer),

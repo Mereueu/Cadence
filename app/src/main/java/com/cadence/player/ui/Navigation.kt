@@ -95,6 +95,7 @@ class UiActions(
     val openSleepTimer: () -> Unit = {},
     val openSpeed: () -> Unit = {},
     val openVisualizer: () -> Unit = {},
+    val openDecks: () -> Unit = {},
 )
 
 val LocalActions = compositionLocalOf<UiActions> { error("UiActions not provided") }
