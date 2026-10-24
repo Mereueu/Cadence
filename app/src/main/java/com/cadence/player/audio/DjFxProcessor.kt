@@ -209,6 +209,7 @@ class DjFxProcessor : BaseAudioProcessor() {
         val out = replaceOutputBuffer(remaining)
         val neutral = isNeutral
         if (neutral && echoTailSilent()) {
+            lastLevel = level
             out.put(inputBuffer)
             out.flip()
             return
@@ -225,7 +226,10 @@ class DjFxProcessor : BaseAudioProcessor() {
         if (lowOn && lowDb != lastLowDb) { designLowShelf(eqLow, 250.0, lowDb); lastLowDb = lowDb }
         if (midOn && midDb != lastMidDb) { designPeak(eqMid, 1000.0, midDb, 0.7); lastMidDb = midDb }
         if (highOn && highDb != lastHighDb) { designHighShelf(eqHigh, 4000.0, highDb); lastHighDb = highDb }
-        val lvl = level
+        // Fader level ramps smoothly across the buffer so moves never click.
+        val lvlTarget = level
+        val lvlStart = lastLevel
+        lastLevel = lvlTarget
         val wet = echoWet
         val fb = echoFeedback.coerceIn(0f, 0.9f)
         val dry = dryGain
@@ -241,7 +245,10 @@ class DjFxProcessor : BaseAudioProcessor() {
             designStemFilters()
             stemRate = sampleRate
         }
+        val lvlStep = if (frames > 0) (lvlTarget - lvlStart) / frames else 0f
+        var lvl = lvlStart
         for (f in 0 until frames) {
+            lvl += lvlStep
             for (c in 0 until channels) {
                 var x = input.short / 32768f
                 if (hpOn) x = hp.process(c, x)
@@ -287,6 +294,7 @@ class DjFxProcessor : BaseAudioProcessor() {
     }
 
     private var silentBuffers = 0
+    private var lastLevel = 1f
 
     private fun echoTailSilent(): Boolean {
         // After the echo is switched off, keep processing ~2 s so the tail decays naturally.

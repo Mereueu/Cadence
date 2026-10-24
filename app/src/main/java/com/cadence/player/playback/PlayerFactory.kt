@@ -10,6 +10,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioTrackBufferSizeProvider
 import androidx.media3.exoplayer.audio.TeeAudioProcessor
 import com.cadence.player.audio.DjFxProcessor
 import com.cadence.player.audio.LiveAudio
@@ -34,6 +35,13 @@ object PlayerFactory {
                 enableAudioTrackPlaybackParams: Boolean,
             ): AudioSink = DefaultAudioSink.Builder(context)
                 .setAudioProcessors(arrayOf<AudioProcessor>(fx, TeeAudioProcessor(tap)))
+                // Smaller output buffer so faders, EQ and pads respond faster (default is 250–750 ms).
+                .setAudioTrackBufferSizeProvider(
+                    DefaultAudioTrackBufferSizeProvider.Builder()
+                        .setMinPcmBufferDurationUs(100_000)
+                        .setMaxPcmBufferDurationUs(220_000)
+                        .build()
+                )
                 .build()
         }
         return ExoPlayer.Builder(context, renderers)

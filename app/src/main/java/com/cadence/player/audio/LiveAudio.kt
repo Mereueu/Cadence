@@ -90,7 +90,7 @@ object LiveAudio {
     val deckB = Deck()
 
     /** How far the tap runs ahead of what is heard (the audio track's buffer). */
-    @Volatile var latencyMs = 200
+    @Volatile var latencyMs = 130
 
     private val fft = Fft(FFT_SIZE)
     private val scratch = FloatArray(FFT_SIZE)

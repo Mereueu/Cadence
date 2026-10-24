@@ -578,7 +578,10 @@ object ManualDj {
                 }
             }
             val vol = (d.volume * d.volume) * xf
-            p.volume = vol
+            // Levels are applied inside the effects chain, not with the player's volume: a player
+            // at volume 0 sharing an audio session can silence the whole output on some phones.
+            fx.level = vol
+            if (p.volume != 1f) p.volume = 1f
             if (side == Side.A) LiveAudio.deckA.gain = vol else LiveAudio.deckB.gain = vol
 
             val dur = p.duration.takeIf { it != C.TIME_UNSET } ?: d.durationMs
