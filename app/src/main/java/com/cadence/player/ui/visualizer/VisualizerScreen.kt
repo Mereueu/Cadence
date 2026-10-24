@@ -391,6 +391,7 @@ private fun Chip(label: String, on: Boolean, onClick: () -> Unit) {
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun PresetList(
     names: List<String>,
