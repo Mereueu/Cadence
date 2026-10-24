@@ -35,6 +35,12 @@ class DjFxProcessor : BaseAudioProcessor() {
     @Volatile var dryGain = 1f
     /** Overall gain, used for loudness normalisation (≤ 1). */
     @Volatile var gain = 1f
+    /** Three-band DJ EQ in dB (0 = flat; about −40 is a full kill). */
+    @Volatile var eqLowDb = 0f
+    @Volatile var eqMidDb = 0f
+    @Volatile var eqHighDb = 0f
+    /** Channel fader / crossfader level applied inside the chain (1 = unity). */
+    @Volatile var level = 1f
 
     fun clearEffects() {
         highPassHz = 0f
@@ -42,10 +48,17 @@ class DjFxProcessor : BaseAudioProcessor() {
         bassKill = 0f
         echoWet = 0f
         dryGain = 1f
+        eqLowDb = 0f
+        eqMidDb = 0f
+        eqHighDb = 0f
+        level = 1f
     }
 
     private val isNeutral: Boolean
-        get() = highPassHz <= 20f && lowPassHz >= 19000f && bassKill <= 0.001f && echoWet <= 0.001f && dryGain >= 0.999f && gain >= 0.999f
+        get() = highPassHz <= 20f && lowPassHz >= 19000f && bassKill <= 0.001f && echoWet <= 0.001f && dryGain >= 0.999f && gain >= 0.999f &&
+            eqOff(eqLowDb) && eqOff(eqMidDb) && eqOff(eqHighDb) && level >= 0.999f
+
+    private fun eqOff(db: Float) = db > -0.05f && db < 0.05f
 
     private var sampleRate = 44100
     private var channels = 2
@@ -71,6 +84,12 @@ class DjFxProcessor : BaseAudioProcessor() {
     private val hp = Biquad()
     private val lp = Biquad()
     private val shelf = Biquad()
+    private val eqLow = Biquad()
+    private val eqMid = Biquad()
+    private val eqHigh = Biquad()
+    private var lastLowDb = Float.NaN
+    private var lastMidDb = Float.NaN
+    private var lastHighDb = Float.NaN
     private var echo = FloatArray(0)
     private var echoPos = 0
     private var lastHp = -1f
@@ -122,6 +141,38 @@ class DjFxProcessor : BaseAudioProcessor() {
         )
     }
 
+    private fun designLowShelf(q: Biquad, freq: Double, db: Float) {
+        val a = Math.pow(10.0, db / 40.0)
+        val w0 = 2 * PI * freq / sampleRate
+        val c = cos(w0); val sn = sin(w0)
+        val alpha = sn / 2 * sqrt(2.0)
+        val sa = 2 * sqrt(a) * alpha
+        q.set(
+            a * ((a + 1) - (a - 1) * c + sa), 2 * a * ((a - 1) - (a + 1) * c), a * ((a + 1) - (a - 1) * c - sa),
+            (a + 1) + (a - 1) * c + sa, -2 * ((a - 1) + (a + 1) * c), (a + 1) + (a - 1) * c - sa,
+        )
+    }
+
+    private fun designHighShelf(q: Biquad, freq: Double, db: Float) {
+        val a = Math.pow(10.0, db / 40.0)
+        val w0 = 2 * PI * freq / sampleRate
+        val c = cos(w0); val sn = sin(w0)
+        val alpha = sn / 2 * sqrt(2.0)
+        val sa = 2 * sqrt(a) * alpha
+        q.set(
+            a * ((a + 1) + (a - 1) * c + sa), -2 * a * ((a - 1) + (a + 1) * c), a * ((a + 1) + (a - 1) * c - sa),
+            (a + 1) - (a - 1) * c + sa, 2 * ((a - 1) - (a + 1) * c), (a + 1) - (a - 1) * c - sa,
+        )
+    }
+
+    private fun designPeak(q: Biquad, freq: Double, db: Float, qf: Double) {
+        val a = Math.pow(10.0, db / 40.0)
+        val w0 = 2 * PI * freq / sampleRate
+        val c = cos(w0)
+        val alpha = sin(w0) / (2 * qf)
+        q.set(1 + alpha * a, -2 * c, 1 - alpha * a, 1 + alpha / a, -2 * c, 1 - alpha / a)
+    }
+
     override fun queueInput(inputBuffer: ByteBuffer) {
         val remaining = inputBuffer.remaining()
         if (remaining == 0) return
@@ -139,6 +190,12 @@ class DjFxProcessor : BaseAudioProcessor() {
         if (hpOn && highPassHz != lastHp) { designHighPass(highPassHz.coerceAtMost(sampleRate * 0.45f)); lastHp = highPassHz }
         if (lpOn && lowPassHz != lastLp) { designLowPass(lowPassHz.coerceAtMost(sampleRate * 0.45f)); lastLp = lowPassHz }
         if (shelfOn && bassKill != lastShelf) { designShelf(bassKill.coerceIn(0f, 1f)); lastShelf = bassKill }
+        val lowDb = eqLowDb; val midDb = eqMidDb; val highDb = eqHighDb
+        val lowOn = !eqOff(lowDb); val midOn = !eqOff(midDb); val highOn = !eqOff(highDb)
+        if (lowOn && lowDb != lastLowDb) { designLowShelf(eqLow, 250.0, lowDb); lastLowDb = lowDb }
+        if (midOn && midDb != lastMidDb) { designPeak(eqMid, 1000.0, midDb, 0.7); lastMidDb = midDb }
+        if (highOn && highDb != lastHighDb) { designHighShelf(eqHigh, 4000.0, highDb); lastHighDb = highDb }
+        val lvl = level
         val wet = echoWet
         val fb = echoFeedback.coerceIn(0f, 0.9f)
         val dry = dryGain
@@ -155,6 +212,9 @@ class DjFxProcessor : BaseAudioProcessor() {
                 if (hpOn) x = hp.process(c, x)
                 if (lpOn) x = lp.process(c, x)
                 if (shelfOn) x = shelf.process(c, x)
+                if (lowOn) x = eqLow.process(c, x)
+                if (midOn) x = eqMid.process(c, x)
+                if (highOn) x = eqHigh.process(c, x)
                 var y = x * dry
                 if (echoLen > 0) {
                     var readPos = echoPos - delaySamples
@@ -165,7 +225,7 @@ class DjFxProcessor : BaseAudioProcessor() {
                     echoPos++
                     if (echoPos >= echoLen) echoPos = 0
                 }
-                val s = (y * g * 32768f).coerceIn(-32768f, 32767f)
+                val s = (y * g * lvl * 32768f).coerceIn(-32768f, 32767f)
                 out.putShort(s.toInt().toShort())
             }
         }
@@ -184,7 +244,7 @@ class DjFxProcessor : BaseAudioProcessor() {
         if (silentBuffers > 120) {
             if (silentBuffers == 121) {
                 echo.fill(0f)
-                hp.clear(); lp.clear(); shelf.clear()
+                hp.clear(); lp.clear(); shelf.clear(); eqLow.clear(); eqMid.clear(); eqHigh.clear()
             }
             return true
         }
@@ -194,7 +254,7 @@ class DjFxProcessor : BaseAudioProcessor() {
     override fun onFlush() {
         echo.fill(0f)
         echoPos = 0
-        hp.clear(); lp.clear(); shelf.clear()
+        hp.clear(); lp.clear(); shelf.clear(); eqLow.clear(); eqMid.clear(); eqHigh.clear()
     }
 
     override fun onReset() {

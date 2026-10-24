@@ -164,6 +164,31 @@ object AutoDj {
         }
     }
 
+    // ------------------------------------------------------------------ manual decks
+
+    /** Deck A (the session player) and deck B, for the manual DJ decks. */
+    internal val playerA: ExoPlayer? get() = main
+    internal val playerB: ExoPlayer? get() = deck
+
+    /** While true the automatic mixing is paused and [ManualDj] drives both decks. */
+    @Volatile var suspended = false
+        private set
+
+    fun suspendForManual() {
+        if (phase != Phase.IDLE) finish()
+        plan = null
+        phase = Phase.IDLE
+        suspended = true
+        publish()
+    }
+
+    fun resumeAfterManual() {
+        suspended = false
+        plan = null
+        phase = Phase.IDLE
+        publish()
+    }
+
     fun release() {
         loop?.cancel()
         loop = null
@@ -273,6 +298,7 @@ object AutoDj {
         val d = deck ?: return
         // Loudness normalisation for the current song (and the incoming one while mixing).
         Decks.fxA.gain = Normalizer.gainFor(p.currentMediaItem?.mediaId?.toLongOrNull())
+        if (suspended) return
         if (phase != Phase.IDLE && phase != Phase.PLANNED) Decks.fxB.gain = Normalizer.gainFor(plan?.toId)
         when (phase) {
             Phase.IDLE, Phase.PLANNED -> planAndPreload(p, d)

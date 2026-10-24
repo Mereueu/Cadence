@@ -1,41 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Five rounded equalizer bars inside the adaptive-icon safe zone (centre 66dp). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <group>
-        <path android:pathData="M33,50a3,3 0,0 1,6 0v8a3,3 0,0 1,-6 0z">
-            <aapt:attr name="android:fillColor">
-                <gradient android:type="linear" android:startX="33" android:startY="34" android:endX="75" android:endY="74"
-                    android:startColor="#FFFF8A5C" android:endColor="#FFFF4D7D" />
-            </aapt:attr>
-        </path>
-        <path android:pathData="M42,42a3,3 0,0 1,6 0v24a3,3 0,0 1,-6 0z">
-            <aapt:attr name="android:fillColor">
-                <gradient android:type="linear" android:startX="33" android:startY="34" android:endX="75" android:endY="74"
-                    android:startColor="#FFFF8A5C" android:endColor="#FFFF4D7D" />
-            </aapt:attr>
-        </path>
-        <path android:pathData="M51,35a3,3 0,0 1,6 0v38a3,3 0,0 1,-6 0z">
-            <aapt:attr name="android:fillColor">
-                <gradient android:type="linear" android:startX="33" android:startY="34" android:endX="75" android:endY="74"
-                    android:startColor="#FFFF8A5C" android:endColor="#FFFF4D7D" />
-            </aapt:attr>
-        </path>
-        <path android:pathData="M60,45a3,3 0,0 1,6 0v18a3,3 0,0 1,-6 0z">
-            <aapt:attr name="android:fillColor">
-                <gradient android:type="linear" android:startX="33" android:startY="34" android:endX="75" android:endY="74"
-                    android:startColor="#FFFF8A5C" android:endColor="#FFFF4D7D" />
-            </aapt:attr>
-        </path>
-        <path android:pathData="M69,51a3,3 0,0 1,6 0v6a3,3 0,0 1,-6 0z">
-            <aapt:attr name="android:fillColor">
-                <gradient android:type="linear" android:startX="33" android:startY="34" android:endX="75" android:endY="74"
-                    android:startColor="#FFFF8A5C" android:endColor="#FFFF4D7D" />
-            </aapt:attr>
-        </path>
-    </group>
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- "Cut vinyl": a record with a slice removed so the disc reads as a C. -->
+    <path android:fillColor="#FF1E1E1E" android:pathData="M54,54L79.98,69.00A30,30 0 1,1 79.98,39.00Z" />
+    <path android:strokeColor="#FF333333" android:strokeWidth="0.8" android:pathData="M77.38,67.50A27,27 0 1,1 77.38,40.50" />
+    <path android:strokeColor="#FF333333" android:strokeWidth="0.8" android:pathData="M74.78,66.00A24,24 0 1,1 74.78,42.00" />
+    <path android:strokeColor="#FF333333" android:strokeWidth="0.8" android:pathData="M72.19,64.50A21,21 0 1,1 72.19,43.50" />
+    <path android:strokeColor="#FF333333" android:strokeWidth="0.8" android:pathData="M69.59,63.00A18,18 0 1,1 69.59,45.00" />
+    <path android:fillColor="#FFFF5A36" android:pathData="M43.7,54a10.3,10.3 0 1,0 20.6,0a10.3,10.3 0 1,0 -20.6,0Z" />
+    <path android:fillColor="#FF111111" android:pathData="M52,54a2,2 0 1,0 4,0a2,2 0 1,0 -4,0Z" />
 </vector>
