@@ -1,0 +1,415 @@
+package com.cadence.player.ui
+
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.cadence.player.MusicViewModel
+import com.cadence.player.R
+import com.cadence.player.data.Song
+import com.cadence.player.ui.player.MiniPlayer
+import com.cadence.player.ui.player.NowPlayingScreen
+import com.cadence.player.ui.screens.AlbumScreen
+import com.cadence.player.ui.screens.ArtistScreen
+import com.cadence.player.ui.screens.EqualizerScreen
+import com.cadence.player.ui.screens.FolderScreen
+import com.cadence.player.ui.screens.HomeScreen
+import com.cadence.player.ui.screens.LibraryScreen
+import com.cadence.player.ui.screens.PlaylistScreen
+import com.cadence.player.ui.screens.PlaylistsScreen
+import com.cadence.player.ui.screens.SearchScreen
+import com.cadence.player.ui.screens.SettingsScreen
+import com.cadence.player.ui.screens.SmartListScreen
+import com.cadence.player.ui.sheets.AddToPlaylistSheet
+import com.cadence.player.ui.sheets.SongMenuSheet
+import com.cadence.player.ui.theme.CadenceColors
+import com.cadence.player.ui.theme.CadenceTheme
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+
+@Composable
+fun CadenceRoot(vm: MusicViewModel, openPlayerRequest: MutableStateFlow<Boolean>) {
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val accent by animateColorAsState(Color(settings.accent.argb), tween(450), label = "accent")
+    CadenceTheme(accent = accent) {
+        val context = LocalContext.current
+        var hasPermission by remember { mutableStateOf(hasAudioPermission(context)) }
+        LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { hasPermission = hasAudioPermission(context) }
+        LaunchedEffect(hasPermission) { if (hasPermission) vm.onPermissionGranted() }
+
+        Box(Modifier.fillMaxSize().background(CadenceColors.Background)) {
+            if (hasPermission) {
+                MainScaffold(vm, openPlayerRequest)
+            } else {
+                PermissionScreen(onGranted = { hasPermission = true })
+            }
+        }
+    }
+}
+
+private fun audioPermission(): String =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO
+    else Manifest.permission.READ_EXTERNAL_STORAGE
+
+private fun hasAudioPermission(context: Context): Boolean =
+    ContextCompat.checkSelfPermission(context, audioPermission()) == PackageManager.PERMISSION_GRANTED
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+@Composable
+private fun PermissionScreen(onGranted: () -> Unit) {
+    val context = LocalContext.current
+    val accent = MaterialTheme.colorScheme.primary
+    var deniedForever by rememberSaveable { mutableStateOf(false) }
+
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if (result[audioPermission()] == true) {
+            onGranted()
+        } else {
+            val activity = context.findActivity()
+            deniedForever = activity != null &&
+                !androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(activity, audioPermission())
+        }
+    }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    0f to lerp(CadenceColors.Background, accent, 0.28f),
+                    0.55f to CadenceColors.Background,
+                )
+            )
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(28.dp)
+    ) {
+        Column(
+            Modifier.align(Alignment.Center),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                Modifier
+                    .size(112.dp)
+                    .clip(RoundedCornerShape(30.dp))
+                    .background(Brush.linearGradient(listOf(Color(0xFF2A1A3A), Color(0xFF0C0B12)))),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painterResource(R.drawable.ic_launcher_foreground),
+                    contentDescription = null,
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(150.dp),
+                )
+            }
+            Spacer(Modifier.height(32.dp))
+            Text("Welcome to Cadence", style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Your music, beautifully played. Cadence needs access to the audio files on this device to build your library. Nothing ever leaves your phone.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = CadenceColors.TextSecondary,
+                textAlign = TextAlign.Center,
+            )
+        }
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+            Button(
+                onClick = {
+                    if (deniedForever) {
+                        context.startActivity(
+                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    } else {
+                        val perms = buildList {
+                            add(audioPermission())
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                        launcher.launch(perms.toTypedArray())
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(18.dp),
+            ) {
+                Text(
+                    if (deniedForever) "Open settings" else "Allow access to music",
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+            if (deniedForever) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Permission was denied. Enable “Music and audio” in Cadence’s app permissions.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = CadenceColors.TextSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow<Boolean>) {
+    val navigator = remember { Navigator() }
+    var playerOpen by rememberSaveable { mutableStateOf(false) }
+    var menuFor by remember { mutableStateOf<Pair<Song, PlaylistContext?>?>(null) }
+    var addToPlaylistSongs by remember { mutableStateOf<List<Song>?>(null) }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val playerState by vm.player.state.collectAsStateWithLifecycle()
+
+    val wantsPlayer by openPlayerRequest.collectAsStateWithLifecycle()
+    LaunchedEffect(wantsPlayer) {
+        if (wantsPlayer) {
+            playerOpen = true
+            openPlayerRequest.value = false
+        }
+    }
+
+    val actions = remember(navigator) {
+        UiActions(
+            navigate = { route ->
+                playerOpen = false
+                navigator.push(route)
+            },
+            openPlayer = { playerOpen = true },
+            openSongMenu = { song, ctx -> menuFor = song to ctx },
+            addToPlaylist = { songs -> if (songs.isNotEmpty()) addToPlaylistSongs = songs },
+            showMessage = { msg ->
+                scope.launch {
+                    snackbar.currentSnackbarData?.dismiss()
+                    snackbar.showSnackbar(msg)
+                }
+            },
+        )
+    }
+
+    val showPlayer = playerOpen && playerState.hasMedia
+    BackHandler(enabled = !showPlayer && navigator.canGoBack) { navigator.back() }
+    BackHandler(enabled = showPlayer) { playerOpen = false }
+
+    androidx.compose.runtime.CompositionLocalProvider(LocalActions provides actions) {
+        Box(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
+                val stateHolder = rememberSaveableStateHolder()
+                Box(Modifier.weight(1f)) {
+                    AnimatedContent(
+                        targetState = navigator.current,
+                        transitionSpec = {
+                            if (targetState is Route.TabRoot && initialState is Route.TabRoot) {
+                                fadeIn(tween(220)) togetherWith fadeOut(tween(120))
+                            } else {
+                                (fadeIn(tween(240)) + slideInHorizontally(tween(260)) { it / 10 }) togetherWith
+                                    fadeOut(tween(140))
+                            }
+                        },
+                        label = "nav",
+                    ) { route ->
+                        stateHolder.SaveableStateProvider(route.toString()) {
+                            RouteContent(route, vm, onBack = { navigator.back() })
+                        }
+                    }
+                }
+                AnimatedVisibility(
+                    visible = playerState.hasMedia,
+                    enter = slideInVertically { it } + fadeIn(),
+                    exit = slideOutVertically { it } + fadeOut(),
+                ) {
+                    MiniPlayer(vm, onOpen = { playerOpen = true })
+                }
+                BottomNav(
+                    selected = navigator.tab,
+                    onSelect = { navigator.selectTab(it) },
+                )
+            }
+
+            SnackbarHost(
+                snackbar,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = if (playerState.hasMedia) 150.dp else 80.dp),
+            ) { data ->
+                Snackbar(
+                    data,
+                    shape = RoundedCornerShape(14.dp),
+                    containerColor = CadenceColors.SurfaceHighest,
+                    contentColor = CadenceColors.TextPrimary,
+                    actionColor = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+
+            AnimatedVisibility(
+                visible = showPlayer,
+                enter = slideInVertically(tween(380)) { it } + fadeIn(tween(200)),
+                exit = slideOutVertically(tween(320)) { it } + fadeOut(tween(260)),
+            ) {
+                NowPlayingScreen(vm, onClose = { playerOpen = false })
+            }
+        }
+
+        menuFor?.let { (song, ctx) ->
+            SongMenuSheet(vm, song, ctx, onDismiss = { menuFor = null })
+        }
+        addToPlaylistSongs?.let { songs ->
+            AddToPlaylistSheet(vm, songs, onDismiss = { addToPlaylistSongs = null })
+        }
+    }
+}
+
+@Composable
+private fun RouteContent(route: Route, vm: MusicViewModel, onBack: () -> Unit) {
+    when (route) {
+        is Route.TabRoot -> when (route.tab) {
+            Tab.HOME -> HomeScreen(vm)
+            Tab.LIBRARY -> LibraryScreen(vm)
+            Tab.PLAYLISTS -> PlaylistsScreen(vm)
+            Tab.SEARCH -> SearchScreen(vm)
+        }
+        is Route.AlbumDetail -> AlbumScreen(vm, route.albumId, onBack)
+        is Route.ArtistDetail -> ArtistScreen(vm, route.name, onBack)
+        is Route.FolderDetail -> FolderScreen(vm, route.path, onBack)
+        is Route.PlaylistDetail -> PlaylistScreen(vm, route.id, onBack)
+        is Route.SmartDetail -> SmartListScreen(vm, route.list, onBack)
+        Route.Equalizer -> EqualizerScreen(vm, onBack)
+        Route.Settings -> SettingsScreen(vm, onBack)
+    }
+}
+
+@Composable
+private fun BottomNav(selected: Tab, onSelect: (Tab) -> Unit) {
+    val accent = MaterialTheme.colorScheme.primary
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(CadenceColors.Surface)
+    ) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(CadenceColors.Outline.copy(alpha = 0.6f)))
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .height(64.dp)
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Tab.entries.forEach { tab ->
+                val isSelected = tab == selected
+                val tint by animateColorAsState(
+                    if (isSelected) accent else CadenceColors.TextTertiary,
+                    label = "tabTint",
+                )
+                val pill by animateColorAsState(
+                    if (isSelected) accent.copy(alpha = 0.16f) else Color.Transparent,
+                    label = "tabPill",
+                )
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { onSelect(tab) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(pill)
+                            .padding(horizontal = 18.dp, vertical = 4.dp),
+                    ) {
+                        Icon(
+                            if (isSelected) tab.selectedIcon else tab.icon,
+                            contentDescription = tab.label,
+                            tint = tint,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        tab.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = tint,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                    )
+                }
+            }
+        }
+    }
+}
