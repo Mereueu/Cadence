@@ -14,6 +14,7 @@ class CadenceApp : Application(), ImageLoaderFactory {
         super.onCreate()
         AppStore.init(this)
         AudioEffects.init(this)
+        com.cadence.player.audio.AnalysisManager.init(this)
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)

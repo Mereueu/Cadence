@@ -21,7 +21,11 @@ import com.cadence.player.data.Playlist
 import com.cadence.player.data.Settings
 import com.cadence.player.data.Song
 import com.cadence.player.data.SongSort
+import com.cadence.player.audio.AnalysisManager
+import com.cadence.player.audio.Camelot
+import com.cadence.player.audio.TrackAnalysis
 import com.cadence.player.playback.ArtworkLoader
+import com.cadence.player.playback.AutoDj
 import com.cadence.player.playback.AudioEffects
 import com.cadence.player.playback.SleepTimer
 import kotlinx.coroutines.Job
@@ -44,6 +48,7 @@ enum class QueueOrder(val label: String) {
     DURATION("Duration"),
     REVERSE("Reverse order"),
     RANDOM("Shuffle once"),
+    HARMONIC("Harmonic (DJ)"),
 }
 
 class MusicViewModel(app: Application) : AndroidViewModel(app) {
@@ -204,6 +209,7 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
             QueueOrder.DURATION -> songs.sortedBy { it.duration }
             QueueOrder.REVERSE -> songs.reversed()
             QueueOrder.RANDOM -> songs.shuffled()
+            QueueOrder.HARMONIC -> harmonicOrder(songs, currentId)
         }
         val index = sorted.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
         player.play(
@@ -213,6 +219,48 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
             startPositionMs = player.currentPositionMs,
             playWhenReady = st.isPlaying,
         )
+    }
+
+    // ---- DJ & analysis ----
+
+    val dj: StateFlow<AutoDj.State> = AutoDj.state
+    val analyses: StateFlow<Map<Long, TrackAnalysis>> = AnalysisManager.results
+    val analysisWorking: StateFlow<Pair<Long, Float>?> = AnalysisManager.working
+    val analysisPending: StateFlow<Int> = AnalysisManager.pending
+
+    fun requestAnalysis(vararg ids: Long) = AnalysisManager.requestUrgent(*ids)
+    fun analyseLibrary() = AnalysisManager.requestBackground(library.value.songs.map { it.id })
+
+    /**
+     * Greedy harmonic ordering: starting from the current song, always pick the remaining song
+     * with the best key compatibility and closest tempo. Unanalysed songs keep their order at the end.
+     */
+    private fun harmonicOrder(songs: List<Song>, currentId: Long?): List<Song> {
+        AnalysisManager.requestBackground(songs.map { it.id })
+        val analysed = songs.filter { AnalysisManager.get(it.id) != null }.toMutableList()
+        val rest = songs.filter { AnalysisManager.get(it.id) == null }
+        val start = songs.firstOrNull { it.id == currentId } ?: analysed.firstOrNull() ?: return songs
+        val result = mutableListOf(start)
+        analysed.remove(start)
+        var last = AnalysisManager.get(start.id)
+        while (analysed.isNotEmpty()) {
+            val from = last
+            val nextSong = if (from == null) {
+                analysed.first()
+            } else {
+                analysed.maxByOrNull { s ->
+                    val a = AnalysisManager.get(s.id)!!
+                    val key = Camelot.compatibility(from.keyIndex, a.keyIndex)
+                    val tempo = 1f - (kotlin.math.abs(Camelot.tempoRatio(a.bpm, from.bpm) - 1f) / 0.08f).coerceIn(0f, 1f)
+                    val energy = 1f - kotlin.math.abs(a.energy - from.energy)
+                    key * 0.55f + tempo * 0.35f + energy * 0.1f
+                }!!
+            }
+            result += nextSong
+            analysed.remove(nextSong)
+            last = AnalysisManager.get(nextSong.id)
+        }
+        return result + rest.filter { it.id != start.id }
     }
 
     fun saveQueueAsPlaylist(name: String): Playlist = AppStore.createPlaylist(name, queueSongs().map { it.id })

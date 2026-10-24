@@ -74,5 +74,14 @@ object LineIcons {
     val Pause = line("Pause", "M9 5v14", "M15 5v14", stroke = 1.6f)
     val Stop = line("Stop", "M7 6h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z")
     val Equalizer = line("Equalizer", "M6 20v-6", "M12 20V8", "M18 20v-9")
+    val Visualizer = line("Visualizer", "M2 12h3l2-5 3 10 3-14 3 12 2-3h4")
+    val Dj = line(
+        "Dj",
+        "M3 8a4 4 0 1 0 8 0a4 4 0 1 0 -8 0",
+        "M13 8a4 4 0 1 0 8 0a4 4 0 1 0 -8 0",
+        "M7 8h.01M17 8h.01",
+        "M3 19h18",
+        "M10 16.5v5",
+    )
     val Sleep = line("Sleep", "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z")
 }

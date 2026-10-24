@@ -41,6 +41,7 @@ sealed interface Route {
     data class SmartDetail(val list: SmartList) : Route
     data object Equalizer : Route
     data object Settings : Route
+    data object Dj : Route
 }
 
 class Navigator(private val home: Tab = Tab.PLAYLISTS) {
@@ -91,6 +92,7 @@ class UiActions(
     val selectTab: (Tab) -> Unit = {},
     val openSleepTimer: () -> Unit = {},
     val openSpeed: () -> Unit = {},
+    val openVisualizer: () -> Unit = {},
 )
 
 val LocalActions = compositionLocalOf<UiActions> { error("UiActions not provided") }

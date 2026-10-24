@@ -99,6 +99,8 @@ import com.cadence.player.ui.screens.PlaylistScreen
 import com.cadence.player.ui.screens.PlaylistsScreen
 import com.cadence.player.ui.screens.RadioScreen
 import com.cadence.player.ui.theme.LineIcons
+import com.cadence.player.ui.dj.DjScreen
+import com.cadence.player.ui.visualizer.VisualizerScreen
 import com.cadence.player.ui.screens.SearchScreen
 import com.cadence.player.ui.screens.SettingsScreen
 import com.cadence.player.ui.screens.SmartListScreen
@@ -247,6 +249,7 @@ private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow
     var addToPlaylistSongs by remember { mutableStateOf<List<Song>?>(null) }
     var showSleep by remember { mutableStateOf(false) }
     var showSpeed by remember { mutableStateOf(false) }
+    var showVisualizer by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -273,10 +276,11 @@ private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow
             selectTab = { navigator.selectTab(it) },
             openSleepTimer = { showSleep = true },
             openSpeed = { showSpeed = true },
+            openVisualizer = { showVisualizer = true },
         )
     }
 
-    BackHandler(enabled = navigator.canGoBack) { navigator.back() }
+    BackHandler(enabled = navigator.canGoBack && !showVisualizer) { navigator.back() }
 
     androidx.compose.runtime.CompositionLocalProvider(LocalActions provides actions) {
         Box(Modifier.fillMaxSize()) {
@@ -306,6 +310,8 @@ private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow
                     onMore = { item ->
                         when (item) {
                             MoreItem.SETTINGS -> navigator.push(Route.Settings)
+                            MoreItem.DJ -> navigator.push(Route.Dj)
+                            MoreItem.VISUALIZER -> showVisualizer = true
                             MoreItem.EQUALIZER -> navigator.push(Route.Equalizer)
                             MoreItem.SLEEP -> showSleep = true
                             MoreItem.SPEED -> showSpeed = true
@@ -334,6 +340,10 @@ private fun MainScaffold(vm: MusicViewModel, openPlayerRequest: MutableStateFlow
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
+        }
+
+        AnimatedVisibility(visible = showVisualizer, enter = fadeIn(tween(400)), exit = fadeOut(tween(300))) {
+            VisualizerScreen(vm, onClose = { showVisualizer = false })
         }
 
         menuFor?.let { (song, ctx) ->
@@ -369,10 +379,13 @@ private fun RouteContent(route: Route, vm: MusicViewModel, onBack: () -> Unit) {
         is Route.SmartDetail -> SmartListScreen(vm, route.list, onBack)
         Route.Equalizer -> EqualizerScreen(vm, onBack)
         Route.Settings -> SettingsScreen(vm, onBack)
+        Route.Dj -> DjScreen(vm, onBack)
     }
 }
 
 private enum class MoreItem(val label: String, val icon: ImageVector) {
+    DJ("Auto DJ", LineIcons.Dj),
+    VISUALIZER("Visualizer", LineIcons.Visualizer),
     EQUALIZER("Equalizer", LineIcons.Equalizer),
     SLEEP("Sleep timer", LineIcons.Sleep),
     SPEED("Playback speed", Icons.Rounded.Speed),

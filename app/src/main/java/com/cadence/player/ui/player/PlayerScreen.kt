@@ -79,6 +79,8 @@ import com.cadence.player.ui.components.rememberArtColor
 import com.cadence.player.ui.screens.StationArt
 import com.cadence.player.ui.theme.CadenceColors
 import com.cadence.player.ui.theme.LineIcons
+import com.cadence.player.playback.AutoDj
+import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.launch
 
 private val Dim = Color(0xFF8C8C8C)
@@ -131,6 +133,12 @@ private fun SongPlayer(vm: MusicViewModel, song: Song) {
     val scope = rememberCoroutineScope()
     val artDrag = remember { Animatable(0f) }
 
+    val dj by vm.dj.collectAsStateWithLifecycle()
+    val analyses by vm.analyses.collectAsStateWithLifecycle()
+    val analysis = analyses[song.id]
+    LaunchedEffect(song.id) { vm.requestAnalysis(song.id) }
+    val mixing = dj.phase == AutoDj.Phase.MIXING || dj.phase == AutoDj.Phase.SETTLING
+
     Column(
         Modifier
             .fillMaxSize()
@@ -139,11 +147,32 @@ private fun SongPlayer(vm: MusicViewModel, song: Song) {
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        // ---- DJ / visualizer bar ----
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            val on = dj.config.enabled
+            Text(
+                "AUTO DJ",
+                style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.6.sp),
+                color = if (on) CadenceColors.Background else Dim,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(if (on) CadenceColors.TextPrimary else Color.Transparent)
+                    .border(1.dp, if (on) CadenceColors.TextPrimary else CadenceColors.Outline, RoundedCornerShape(2.dp))
+                    .clickable {
+                        AutoDj.updateConfig { it.copy(enabled = !it.enabled) }
+                        actions.showMessage(if (on) "Auto DJ off" else "Auto DJ on · songs will be mixed")
+                    }
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+            )
+            Spacer(Modifier.weight(1f))
+            LineButton(LineIcons.Dj, "DJ controls") { actions.navigate(Route.Dj) }
+            LineButton(LineIcons.Visualizer, "Visualizer") { actions.openVisualizer() }
+        }
         BoxWithConstraints(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(top = 28.dp, bottom = 20.dp),
+                .padding(top = 12.dp, bottom = 20.dp),
             contentAlignment = Alignment.Center,
         ) {
             val side = minOf(maxWidth, maxHeight)
@@ -213,6 +242,28 @@ private fun SongPlayer(vm: MusicViewModel, song: Song) {
                     .weight(1f, fill = false)
                     .clickable { if (song.albumId > 0) actions.navigate(Route.AlbumDetail(song.albumId)) },
             )
+        }
+
+        val infoLine = when {
+            mixing -> dj.plan?.let { p -> vm.songById(p.toId)?.let { "MIXING INTO ${it.title.uppercase()}" } }
+            analysis != null -> "${"%.1f".format(analysis.bpm).removeSuffix(".0")} BPM · ${analysis.camelot} · ${analysis.keyName}"
+            else -> null
+        }
+        if (infoLine != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                infoLine,
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.2.sp),
+                color = if (mixing) CadenceColors.TextPrimary else Dim,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (mixing) {
+                Spacer(Modifier.height(6.dp))
+                Box(Modifier.width(120.dp).height(1.dp).background(Color(0xFF333333))) {
+                    Box(Modifier.fillMaxWidth(dj.progress.coerceIn(0f, 1f)).height(1.dp).background(CadenceColors.TextPrimary))
+                }
+            }
         }
 
         Spacer(Modifier.height(20.dp))

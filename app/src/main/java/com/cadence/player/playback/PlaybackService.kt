@@ -66,21 +66,13 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        val player = ExoPlayer.Builder(this)
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(C.USAGE_MEDIA)
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                    .build(),
-                /* handleAudioFocus = */ true
-            )
-            .setHandleAudioBecomingNoisy(true)
-            .setWakeMode(C.WAKE_MODE_LOCAL)
-            .build()
+        // Deck A: the session's player, with DJ effects and the visualizer tap in its audio chain.
+        val player = PlayerFactory.create(this, deckB = false)
 
         val sessionId = Util.generateAudioSessionIdV21(this)
         player.audioSessionId = sessionId
         AudioEffects.attach(sessionId)
+        AutoDj.attach(this, player, sessionId)
 
         player.addListener(listener)
         PlaybackBridge.player = player
@@ -114,6 +106,7 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         saveQueue()
         SleepTimer.cancel()
+        AutoDj.release()
         PlaybackBridge.player = null
         mediaSession?.run {
             player.removeListener(listener)
