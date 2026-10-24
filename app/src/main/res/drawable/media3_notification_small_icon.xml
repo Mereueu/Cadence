@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Overrides Media3's default notification icon with the Cadence bars mark. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M3,10.5a1.25,1.25 0,0 1,2.5 0v3a1.25,1.25 0,0 1,-2.5 0z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M7,7.5a1.25,1.25 0,0 1,2.5 0v9a1.25,1.25 0,0 1,-2.5 0z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M10.75,4.5a1.25,1.25 0,0 1,2.5 0v15a1.25,1.25 0,0 1,-2.5 0z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M14.5,8.5a1.25,1.25 0,0 1,2.5 0v7a1.25,1.25 0,0 1,-2.5 0z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M18.5,10.75a1.25,1.25 0,0 1,2.5 0v2.5a1.25,1.25 0,0 1,-2.5 0z" />
+</vector>
