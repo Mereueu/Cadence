@@ -1,5 +1,6 @@
 package com.cadence.player
 
+import com.cadence.player.playback.RadioBridge
 import android.app.Application
 import android.database.ContentObserver
 import android.net.Uri
@@ -319,26 +320,13 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
 
     fun playRadio(station: RadioStation, list: List<RadioStation> = listOf(station)) {
         radioList = list
+        RadioBridge.stations = list // lets other apps change station through the media session
         knownStations.value = knownStations.value + list.associateBy { it.mediaId }
         viewModelScope.launch {
             _radioLoading.value = station.id
             try {
                 val url = RadioRepository.resolveStream(station, settings.value.diListenKey)
-                val uri = Uri.parse(url)
-                val item = MediaItem.Builder()
-                    .setMediaId(station.mediaId)
-                    .setUri(uri)
-                    .setRequestMetadata(MediaItem.RequestMetadata.Builder().setMediaUri(uri).build())
-                    .setMediaMetadata(
-                        MediaMetadata.Builder()
-                            .setTitle(station.name)
-                            .setArtist(station.subtitle.ifBlank { station.source.label })
-                            .setStation(station.name)
-                            .setArtworkUri(station.imageUrl?.let { Uri.parse(it) })
-                            .setIsPlayable(true)
-                            .build()
-                    )
-                    .build()
+                val item = RadioBridge.mediaItem(station, url)
                 _queueSource.value = "${station.source.label} radio"
                 player.playItems(listOf(item))
             } catch (e: Exception) {

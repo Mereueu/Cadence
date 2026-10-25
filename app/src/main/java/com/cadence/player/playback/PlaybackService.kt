@@ -12,6 +12,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Metadata
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.BitmapLoader
@@ -24,6 +25,10 @@ import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.LibraryParams
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
+import androidx.media3.extractor.metadata.icy.IcyInfo
+import android.os.Bundle
 import com.cadence.player.data.Library
 import com.cadence.player.data.MediaRepository
 import com.cadence.player.data.Song
@@ -54,6 +59,7 @@ class PlaybackService : MediaLibraryService() {
 
     private val listener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            setRadioNowPlaying(null) // a new station or song: the old stream title no longer applies
             if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) lastCountedId = null
             countCurrentPlay()
             saveQueue()
@@ -63,9 +69,30 @@ class PlaybackService : MediaLibraryService() {
             if (isPlaying) countCurrentPlay() else saveQueue()
         }
 
+        override fun onMetadata(metadata: Metadata) {
+            // Internet radio streams announce the current song as ICY "StreamTitle".
+            for (i in 0 until metadata.length()) {
+                val entry = metadata.get(i)
+                if (entry is IcyInfo) {
+                    entry.title?.trim()?.takeIf { it.isNotEmpty() }?.let { setRadioNowPlaying(it) }
+                }
+            }
+        }
+
         override fun onTimelineChanged(timeline: Timeline, reason: Int) {
             if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) saveQueue()
         }
+    }
+
+    /** Remembers the radio song and tells connected apps (e.g. Road Buddy) about it. */
+    private fun setRadioNowPlaying(title: String?) {
+        if (title == RadioBridge.nowPlaying) return
+        RadioBridge.nowPlaying = title
+        mediaSession?.broadcastCustomCommand(RadioBridge.RADIO_NOW_PLAYING_CHANGED, radioNowPlayingBundle())
+    }
+
+    private fun radioNowPlayingBundle() = Bundle().apply {
+        putString(RadioBridge.EXTRA_RADIO_NOW_PLAYING, RadioBridge.nowPlaying)
     }
 
     /** Counts a play once per track start, feeding "Recently played" and "Most played". */
@@ -229,6 +256,40 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private inner class SessionCallback : MediaLibrarySession.Callback {
+        // Let other apps change radio station and read the radio song through the session.
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): MediaSession.ConnectionResult {
+            val base = super.onConnect(session, controller)
+            if (!base.isAccepted) return base
+            val commands = base.availableSessionCommands.buildUpon()
+                .add(RadioBridge.NEXT_STATION)
+                .add(RadioBridge.PREVIOUS_STATION)
+                .add(RadioBridge.GET_RADIO_NOW_PLAYING)
+                .build()
+            return MediaSession.ConnectionResult.accept(commands, base.availablePlayerCommands)
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            val result = when (customCommand.customAction) {
+                RadioBridge.ACTION_NEXT_STATION, RadioBridge.ACTION_PREVIOUS_STATION -> {
+                    val delta = if (customCommand.customAction == RadioBridge.ACTION_NEXT_STATION) 1 else -1
+                    if (RadioBridge.step(delta)) SessionResult(SessionResult.RESULT_SUCCESS)
+                    else SessionResult(SessionResult.RESULT_ERROR_INVALID_STATE)
+                }
+                RadioBridge.ACTION_GET_RADIO_NOW_PLAYING ->
+                    SessionResult(SessionResult.RESULT_SUCCESS, radioNowPlayingBundle())
+                else -> return super.onCustomCommand(session, controller, customCommand, args)
+            }
+            return Futures.immediateFuture(result)
+        }
+
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
             browser: MediaSession.ControllerInfo,

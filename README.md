@@ -3,7 +3,7 @@
 An offline music player and DJ app for Android, built with Jetpack Compose and Media3.
 Your music never leaves your phone. The app has no ads, no account and no tracking.
 
-**Current version: 1.6.0**
+**Current version: 1.6.1**
 
 ---
 
@@ -98,6 +98,15 @@ One tap changes the queue, the screen layout and how playback behaves. Tap the m
 ## Android Auto
 Browse Listening modes, Shuffle all, Favorites, Recently played, Playlists, Albums and Artists, and search by voice, from your car's screen.
 Because the APK isn't installed from the Play Store, turn on **Unknown sources** in Android Auto's developer settings first. To find them, open Android Auto settings and tap *Version* 10 times; the developer settings are then in the ⋮ menu.
+
+## Works with other apps
+Cadence's media session lets other apps show and control what's playing, for example the Road Buddy navigation app.
+- Songs: play, pause, next and previous, plus title, artist and artwork.
+- Radio: other apps can switch to the previous or next station with the custom session commands
+  `com.cadence.player.NEXT_STATION` and `com.cadence.player.PREVIOUS_STATION`.
+- Radio song: the song a station is playing (from its stream title) is sent to connected apps with
+  `com.cadence.player.RADIO_NOW_PLAYING_CHANGED`, and can be asked for with `com.cadence.player.GET_RADIO_NOW_PLAYING`.
+  Both carry it under the `com.cadence.player.RADIO_NOW_PLAYING` key.
 
 ## Get the APK
 Every push to `main` builds a signed release APK with GitHub Actions.
